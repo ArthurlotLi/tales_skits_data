@@ -104,7 +104,10 @@ def _process_skit_video(video_id, video_fpath, game_name):
   
   # Generate a bitmask from the audio - a single bit for each sample
   # via Voice Activity Detection.
-  vad_mask = voice_activity_mask(wav, vad_fpath)
+  if use_silence_instead_of_vad:
+    vad_mask = volume_activity_mask(wav, vad_fpath)
+  else:
+    vad_mask = voice_activity_mask(wav, vad_fpath)
   vad_mask_length = len(vad_mask)
 
   # Attempt to load the video. 
@@ -182,7 +185,7 @@ def _process_frame(video_id, frame, frame_num, video_length, vad_mask,
   # DEBUG ONLY! Visualize the frame and indicate sound activity. 
   cv2.putText(roi_frame, "VAD: %s" % str(vad_mask[frame_sample_index]), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 2, cv2.LINE_AA)
   cv2.imshow("TEST", roi_frame)
-  if cv2.waitKey(10) & 0xFF == ord('q'):
+  if cv2.waitKey(40) & 0xFF == ord('q'):
     input()
 
   return (NO_AUDIO_ACTIVITY,)
@@ -193,7 +196,7 @@ def _map_frame_to_sample(frame_num, video_length, vad_mask_length):
   frame. 
   """
   frame_sample_index = vad_mask_length * frame_num
-  frame_sample_index = frame_sample_index / 161660
+  frame_sample_index = frame_sample_index / video_length
 
   # Always get the floor of this. This is our integer index. 
   frame_sample_index = math.floor(frame_sample_index)

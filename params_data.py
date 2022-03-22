@@ -12,7 +12,7 @@ int16_max = (2 ** 15) - 1
 # Video configuration
 initial_video_id_index = 1
 # Run OCR every _ frames to check for start/end of utterance
-frames_to_skip = 3
+frames_to_skip = 1
 video_suffix = ".mp4"
 
 # Audio configruation
@@ -20,9 +20,17 @@ sample_rate = 16000 # In Hz
 bit_rate = "160k" # kbps
 audio_channels = 1
 audio_suffix = ".wav"
-vad_moving_average_width = 8 # Samples. Larger values - less smooth.
-vad_window_length = 10 # Milliseconds (10, 20, or 30) - Granularity of the VAD operation
+
+use_silence_instead_of_vad = True
+
+vad_moving_average_width = 4 # Samples. Larger values - less smooth.
+vad_use_moving_average = False
+vad_window_length = 30 # Milliseconds (10, 20, or 30) - Granularity of the VAD operation
 vad_suffix = ".vad_mask.npy"
+
+min_silence = 300 # In milliseconds. Lower values are more accurate, but risk excessive OCR processing.
+silence_thresh = 42 # Subtracted from dBFS. Should be as high (low) as possible, since this is CLEAN data. 
+window_length = 30 
 
 # Region of interest for videos. Where the subtitles + name
 # should appear. Made in terms of percentage of x and y as
@@ -31,7 +39,7 @@ subtitle_roi_by_game = {
   "berseria" : {
     "subtitle_roi_x1": .15, # % total resolution from left.
     "subtitle_roi_y1": .75, # % total resolution from top.
-    "subtitle_roi_x2": .15, # % total resolution from right.
+    "subtitle_roi_x2": .10, # % total resolution from right.
     "subtitle_roi_y2": .01, # % total resolution from bottom. 
   },
   "zestiria" : {
