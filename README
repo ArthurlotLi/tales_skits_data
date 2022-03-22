@@ -24,6 +24,11 @@ To generate a dataset, make sure to do the following:
    Make sure to add the directory with ffmpeg.exe to the system PATH,
    then restart your command line/terminal session.
 
-2. Gather data and place in a subfolder called "data" in the repo. 
+2. Install requirements by running:
 
-3. Run dataset_generation.py. 
+   pip install -r requirements.txt
+
+3. Gather data and place in a subfolder called "data" in the repo. 
+
+4. Run dataset_generation.py. Output data will be placed in a folder
+   titled "TalesSkits".
