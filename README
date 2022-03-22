@@ -5,4 +5,25 @@ Dataset Collection Tools
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
-Text
+Tools for collecting voice actor data from Tales of video games. 
+Produces audio samples and transcripts of utterances grouped by 
+speaker, identified and transcribed via Optical Character 
+Recognition of on-screen texts during ingame "skits".
+
+------------------------------------------------------------------------------
+Usage:
+------------------------------------------------------------------------------
+
+To generate a dataset, make sure to do the following:
+
+1. Install FFmpeg. The pip installation won't set the cli tool, so you
+   need to install from here:
+
+   https://ffmpeg.org/
+
+   Make sure to add the directory with ffmpeg.exe to the system PATH,
+   then restart your command line/terminal session.
+
+2. Gather data and place in a subfolder called "data" in the repo. 
+
+3. Run dataset_generation.py. 

@@ -1,0 +1,3 @@
+webrtcvad
+librosa 
+ffmpeg
