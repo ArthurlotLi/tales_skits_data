@@ -61,9 +61,8 @@ def extract_tales_skits():
   print("[INFO] Dataset - found %d files in folder %s." % (data_count,_data_folder))
   for video_id in range(_initial_video_id_index, data_count+_initial_video_id_index):
     video_fpath = _data_folder + "/" + data_contents[video_id-_initial_video_id_index]
-    print("[INFO] Dataset - Processing video id %d: %s" % (video_id, video_fpath))
+    print("\n[INFO] Dataset - Processing video id %d: %s" % (video_id, video_fpath))
     _process_skit_video(video_id, video_fpath)
-
 
 def _process_skit_video(video_id, video_fpath):
   """
@@ -89,6 +88,7 @@ def _process_skit_video(video_id, video_fpath):
   # First, to work with the audio, we need to extract a wav file from
   # the video, if it doesn't exist aready.
   wav_fpath = video_fpath.replace(_video_suffix, _audio_suffix)
+  vad_fpath = video_fpath.replace(_video_suffix, ".npy")
   if _create_wav_file(video_fpath, wav_fpath) is False: return
 
   # Attempt to load the wav into memory. 
@@ -100,8 +100,13 @@ def _process_skit_video(video_id, video_fpath):
   if source_sr is not None and source_sr != _sample_rate:
     print("[INFO] Dataset - Source sample rate %d does not match set sample rate %d! Resampling." % (source_sr, _sample_rate))
     wav = librosa.resample(wav, orig_sr=source_sr, target_sr=_sample_rate)
+  
+  # Generate a bitmask from the audio - a single bit for each sample
+  # courtesy of Voice Activity Detection.
+  vad_mask = _voice_activity_mask(wav, vad_fpath)
 
   # Attempt to load the video. 
+  print("[DEBUG] Dataset - Loading video.")
   cap = cv2.VideoCapture(video_fpath)
   if cap.isOpened() is False: 
     print("[ERROR] Dataset - Error opening video file at %s." % video_fpath)
@@ -112,9 +117,6 @@ def _process_skit_video(video_id, video_fpath):
   width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
   height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
   fps    = cap.get(cv2.CAP_PROP_FPS)
-  
-  # Generate a bitmask from the audio - a single bit for each frame. 
-  vad_mask = _voice_activity_mask(wav)
 
   # Loop through the video. 
   stop_video = False
@@ -122,7 +124,7 @@ def _process_skit_video(video_id, video_fpath):
   # If we don't, the metadata count is off, for some reason. 
   frames_to_process = length +1
   while cap.isOpened() and stop_video is False:
-    for frame_num in tqdm(range(0, frames_to_process), desc="Frames Processed", total=frames_to_process):
+    for frame_num in tqdm(range(0, frames_to_process), desc="Video Frames Processed", total=frames_to_process):
       # We read in every single frame to be absolutely sure that we
       # are not missing any frames with audio activity. 
 
@@ -157,7 +159,7 @@ def _create_wav_file(video_fpath, wav_fpath):
   """
   # If the wav file exists, just end. 
   if os.path.exists(wav_fpath): 
-    print("[INFO] Dataset - Found and using existing wav: %s" % wav_fpath)
+    print("[INFO] Dataset - Using existing wav: %s" % wav_fpath)
     return True
 
   # If the wav doesn't exist, create it. 
@@ -174,7 +176,7 @@ def _create_wav_file(video_fpath, wav_fpath):
   print("[ERROR] Dataset - Failed to create wav %s!" % wav_fpath)
   return False
 
-def _voice_activity_mask(wav):
+def _voice_activity_mask(wav, vad_fpath):
   """
   Given a read in wav of video, generate a VAD mask that indicates
   where audio activity is occuring in the video. This mask needs to
@@ -183,9 +185,22 @@ def _voice_activity_mask(wav):
   We'll use a small moving average to even out small spikes. 
 
   While this method does result in many ultimately unused calculations,
-  it does result in the most accurate frame-to-audio checking.
+  it does result in the most accurate frame-to-audio mapping. 
   """
   wav_length = len(wav)
+
+  # Check if the VAD mask has been generated already. If so, just load
+  # it. 
+  if os.path.exists(vad_fpath):
+    print("[INFO] Dataset - Loading existing VAD mask at: %s" % vad_fpath)
+    loaded_mask = np.load(vad_fpath)
+    loaded_mask_length = len(loaded_mask)
+    print("[INFO] Dataset - Loaded existing VAD mask with length %d." % loaded_mask_length)
+    if loaded_mask_length != wav_length:
+      print("[WARNING] Dataset - Loaded existing VAD mask length %d does NOT match wav length %d. Overwriting..." % (loaded_mask_length, wav_length))
+    else:
+      return loaded_mask
+
   # We want a mask for EVERY SINGLE SAMPLE in this wav file. This
   # allows us to reference the bitmask in the same context as the
   # wav samples.
@@ -194,6 +209,7 @@ def _voice_activity_mask(wav):
   print("    Wav Length: %d" % wav_length)
   print("    VAD Window Length: %d" % _vad_window_length)
   print("    Samples Per Window: %d" % samples_per_window)
+  print("    VAD fpath: \"%s\"" % vad_fpath)
   print("")
 
   # Convert the waveform into a tractable 16-bit mono PCM using
@@ -209,10 +225,21 @@ def _voice_activity_mask(wav):
   voice_flags = []
   vad = webrtcvad.Vad(mode=3)
   print("[INFO] Dataset - Processing VAD mask.")
-  for window_start in tqdm(range(0, wav_length - samples_per_window), desc="Samples Processed"):
+  for window_start in tqdm(range(0, wav_length - samples_per_window), desc="VAD Samples Processed"):
     window_end = window_start + samples_per_window
     voice_flags.append(vad.is_speech(pcm_wave[window_start * 2:window_end * 2],
                                      sample_rate=_sample_rate))
+
+  # Account for the trailing samples that we don't have enough to
+  # execute VAD on as window_start points. Use them as window_end
+  # points instead. 
+  trailing_samples_count = 0
+  for window_end in range(wav_length - samples_per_window, wav_length):
+    trailing_samples_count += 1
+    window_start = window_end - samples_per_window
+    voice_flags.append(vad.is_speech(pcm_wave[window_start * 2:window_end * 2],
+                                     sample_rate=_sample_rate))
+  print("[INFO] Dataset - Processed %d trailing samples." % trailing_samples_count)
   
   # Given our flags, apply a moving average to remove spikes
   # in the voice_flags array. We'll use a helper function for
@@ -235,7 +262,11 @@ def _voice_activity_mask(wav):
   audio_mask = np.round(audio_mask).astype(np.bool)
 
   print("[INFO] Dataset - Audio mask generated. Length: %d" % len(audio_mask))
-  print("       Sample:" +str(audio_mask[0]) + str(audio_mask[1]) + str(audio_mask[2]) + str(audio_mask[3]) + str(audio_mask[4]))
+
+  # Write to file. 
+  print("[INFO] Dataset - Writing audio mask to file: %s" % vad_fpath)
+  np.save(vad_fpath, audio_mask)
+
   # We're done here. Return the audio mask.
   return audio_mask
 
