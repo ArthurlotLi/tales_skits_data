@@ -24,9 +24,17 @@
 from params_data import *
 from audio_utils import *
 
+import math
 import cv2
 import os
 from tqdm import tqdm
+
+# Enums to make behavior clearer.
+NO_AUDIO_ACTIVITY = 1 # VAD says this frame has no activity. Move on. ]
+NO_TEXT_FOUND = 2
+SAME_UTTERANCE = 3 # VAD says this frame is the same as the current utterance. Move on.
+NEW_UTTERANCE_BAD = 4 # A valid utterance, but not accepted transcript. (unknown speaker, bad text)
+NEW_UTTERANCE_GOOD = 5 # A new utterance. 
 
 def extract_tales_skits():
   """
@@ -48,13 +56,23 @@ def extract_tales_skits():
   for video_id in range(initial_video_id_index, data_count+initial_video_id_index):
     
     # TODO: Implement multiprocessing and use batches. 
+    video_filename = video_files[video_id-initial_video_id_index]
+    video_fpath = data_folder + "/" + video_filename
+    game_name = _determine_game_title(video_filename)
+    print("\n[INFO] Dataset - Processing video id %d for %s skits from file: \"%s\"" % (video_id, game_name, video_fpath))
+    _process_skit_video(video_id, video_fpath, game_name)
 
-    video_fpath = data_folder + "/" + video_files[video_id-initial_video_id_index]
-    print("\n[INFO] Dataset - Processing video id %d for file: \"%s\"" % (video_id, video_fpath))
-    _process_skit_video(video_id, video_fpath)
+def _determine_game_title(filename):
+  """
+  Given the filename, retrieve the game title code. This will help
+  allow us to behave differently depending on the game skit format. 
+  """
+  lower_filename = filename.lower()
+  for game_name in subtitle_roi_by_game:
+    if game_name in lower_filename:
+      return game_name
 
-
-def _process_skit_video(video_id, video_fpath):
+def _process_skit_video(video_id, video_fpath, game_name):
   """
   Processes an entire skit video. For each selected frame in the video,
   takes the following steps:
@@ -87,6 +105,7 @@ def _process_skit_video(video_id, video_fpath):
   # Generate a bitmask from the audio - a single bit for each sample
   # via Voice Activity Detection.
   vad_mask = voice_activity_mask(wav, vad_fpath)
+  vad_mask_length = len(vad_mask)
 
   # Attempt to load the video. 
   print("[DEBUG] Dataset - Loading video.")
@@ -96,16 +115,19 @@ def _process_skit_video(video_id, video_fpath):
     return 
 
   # Get video statistics. We really hope this is correct. If not, then
-  # we'll error out but still process to the end of the video. 
-  length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+  # we'll error out.
+  video_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
   # Loop through the video. 
   stop_video = False
   stop_video_frame = None # For debug output only. 
   # Add an additional loop to ensure we reach the end of the video.
   # If we don't, the metadata count is off, for some reason. 
-  frames_to_process = length +1
+  frames_to_process = video_length +1
   while cap.isOpened() and stop_video is False:
+    prev_transcript = None
+    prev_start = None
+    last_frame_status = None
     for frame_num in tqdm(range(0, frames_to_process), desc="Video Frames Processed", total=frames_to_process):
       if stop_video is False:
         # We read in every single frame to be absolutely sure that we
@@ -115,26 +137,86 @@ def _process_skit_video(video_id, video_fpath):
 
         if ret:
           if frame_num % frames_to_skip == 0:
-            pass
+            # Process the frame if we're not skipping it. 
+            frame_ret = _process_frame(video_id, frame, frame_num, video_length, 
+                                       vad_mask, vad_mask_length, prev_transcript, 
+                                       prev_start, last_frame_status, game_name)
+            last_frame_status = frame_ret[0]
+
+            # Depending on the ret, change behavior. 
+            if last_frame_status == NEW_UTTERANCE_BAD or last_frame_status == NEW_UTTERANCE_GOOD:
+              # If we successfully read the transcript of a new utterance,
+              # good or bad, save the information.
+              prev_transcript = frame_ret[1]
+              prev_start = frame_ret[2]
         else:
           # End of video reached. End the loop. 
           stop_video_frame = frame_num
           stop_video = True
           break
-  
-    if stop_video is False:
-      print("[ERROR] Dataset - Video metadata was incorrect!!")
-      # Loop again with an indefinite number of frames to process.
-      # We won't stop until we actually hit the end of the video. 
-      # This should hopefully never happen...
-      frames_to_process = int16_max
-    else:
-      print("[DEBUG] Dataset - End of video reached. End frame count: %d" % stop_video_frame)
+    
+    # This should hopefully never happen... If it does, the metadata
+    # was incorrect and likely the vad mask was incorrect. Die here. 
+    assert stop_video is True
+    print("[DEBUG] Dataset - End of video reached. End frame count: %d" % stop_video_frame)
   
   # We've finished processing the video. cleanup.
   cap.release()
   cv2.destroyAllWindows()
 
+def _process_frame(video_id, frame, frame_num, video_length, vad_mask, 
+                   vad_mask_length, prev_transcript, prev_start, 
+                   last_frame_status, game_name):
+  """
+  Provided the video_id, the full-sized cv2 frame extracted from the
+  source video, the frame number + total frames of the source video,
+  the vad_mask, and current utterance + frame data, process it. 
+
+  Can return in a few ways: 
+  - (status,) -> not a new utterance.
+  - (status, prev_transcript, prev_start) -> new utterance (good/bad)
+  """
+  frame_sample_index = _map_frame_to_sample(frame_num, video_length, vad_mask_length)
+  roi_frame = _get_frame_region_of_interest(frame, game_name)
+
+  # DEBUG ONLY! Visualize the frame and indicate sound activity. 
+  cv2.putText(roi_frame, "VAD: %s" % str(vad_mask[frame_sample_index]), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 2, cv2.LINE_AA)
+  cv2.imshow("TEST", roi_frame)
+  if cv2.waitKey(10) & 0xFF == ord('q'):
+    input()
+
+  return (NO_AUDIO_ACTIVITY,)
+
+def _map_frame_to_sample(frame_num, video_length, vad_mask_length):
+  """
+  Calculate the index of the sample that corresponds to the current
+  frame. 
+  """
+  frame_sample_index = vad_mask_length * frame_num
+  frame_sample_index = frame_sample_index / 161660
+
+  # Always get the floor of this. This is our integer index. 
+  frame_sample_index = math.floor(frame_sample_index)
+  return frame_sample_index
+
+def _get_frame_region_of_interest(frame, game_name):
+  """
+  Given a frame, returns the region of interest. OpenCV stores images
+  in numpy arrays, so this is pretty easy. 
+  """
+  # We expect a tensor (y pixels, x pixels, channels (3 for RGB))
+  # Ex) (1080, 1920, 3)
+  frame_shape = frame.shape
+  y_tot = frame_shape[0]
+  x_tot = frame_shape[1]
+
+  x1 = int(subtitle_roi_by_game[game_name]["subtitle_roi_x1"] * x_tot)
+  y1 = int(subtitle_roi_by_game[game_name]["subtitle_roi_y1"] * y_tot)
+  x2 = x_tot - int(subtitle_roi_by_game[game_name]["subtitle_roi_x2"] * x_tot)
+  y2 = y_tot - int(subtitle_roi_by_game[game_name]["subtitle_roi_y2"] * y_tot)
+
+  roi_frame = frame[y1:y2, x1:x2]
+  return roi_frame
 
 # When we run, just head right into generation. 
 if __name__ == "__main__":
