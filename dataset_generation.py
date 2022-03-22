@@ -46,6 +46,9 @@ def extract_tales_skits():
   data_count = len(video_files)
   print("[INFO] Dataset - found %d %s files in folder %s." % (data_count, video_suffix, data_folder))
   for video_id in range(initial_video_id_index, data_count+initial_video_id_index):
+    
+    # TODO: Implement multiprocessing and use batches. 
+
     video_fpath = data_folder + "/" + video_files[video_id-initial_video_id_index]
     print("\n[INFO] Dataset - Processing video id %d for file: \"%s\"" % (video_id, video_fpath))
     _process_skit_video(video_id, video_fpath)
@@ -72,7 +75,7 @@ def _process_skit_video(video_id, video_fpath):
           for this video_id. If it is not found, create it. 
   """
   wav_fpath = video_fpath.replace(video_suffix, audio_suffix)
-  vad_fpath = video_fpath.replace(video_suffix, ".npy")
+  vad_fpath = video_fpath.replace(video_suffix, vad_suffix)
 
   # First, to work with the audio, we need to extract a wav file from
   # the video, if it doesn't exist aready.
@@ -92,7 +95,8 @@ def _process_skit_video(video_id, video_fpath):
     print("[ERROR] Dataset - Error opening video file at %s." % video_fpath)
     return 
 
-  # Get video statistics. 
+  # Get video statistics. We really hope this is correct. If not, then
+  # we'll error out but still process to the end of the video. 
   length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
   # Loop through the video. 

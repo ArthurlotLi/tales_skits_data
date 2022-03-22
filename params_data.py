@@ -21,3 +21,4 @@ audio_channels = 1
 audio_suffix = ".wav"
 vad_moving_average_width = 8 # Samples. Larger values - less smooth.
 vad_window_length = 10 # Milliseconds (10, 20, or 30) - Granularity of the VAD operation
+vad_suffix = ".vad_mask.npy"
