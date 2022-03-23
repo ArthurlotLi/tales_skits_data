@@ -24,17 +24,18 @@
 from params_data import *
 from audio_utils import *
 
-import math
+import pytesseract
 import cv2
 import os
 from tqdm import tqdm
 
 # Enums to make behavior clearer.
 NO_AUDIO_ACTIVITY = 1 # VAD says this frame has no activity. Move on. ]
-NO_TEXT_FOUND = 2
-SAME_UTTERANCE = 3 # VAD says this frame is the same as the current utterance. Move on.
-NEW_UTTERANCE_BAD = 4 # A valid utterance, but not accepted transcript. (unknown speaker, bad text)
-NEW_UTTERANCE_GOOD = 5 # A new utterance. 
+NO_SPEAKER_FOUND = 2
+NO_TEXT_FOUND = 3
+SAME_UTTERANCE = 4 # VAD says this frame is the same as the current utterance. Move on.
+NEW_UTTERANCE_BAD = 5 # A valid utterance, but not accepted transcript. (unknown speaker, bad text)
+NEW_UTTERANCE_GOOD = 6 # A new utterance. 
 
 def extract_tales_skits():
   """
@@ -132,7 +133,7 @@ def _process_skit_video(video_id, video_fpath, game_name):
   frames_to_process = video_length +1
   while cap.isOpened() and stop_video is False:
     prev_transcript = None
-    prev_start = None
+    prev_speaker = None
     last_frame_status = None
     for frame_num in tqdm(range(0, frames_to_process), desc="Video Frames Processed", total=frames_to_process):
       if stop_video is False:
@@ -149,7 +150,7 @@ def _process_skit_video(video_id, video_fpath, game_name):
             # Process the frame if we're not skipping it. 
             frame_ret = _process_frame(video_id, frame, frame_num, video_length, 
                                        activity_segments, activity_index, prev_transcript, 
-                                       prev_start, last_frame_status, game_name)
+                                       prev_speaker, last_frame_status, game_name)
             last_frame_status = frame_ret[0]
 
             # Depending on the ret, change behavior. 
@@ -157,7 +158,7 @@ def _process_skit_video(video_id, video_fpath, game_name):
               # If we successfully read the transcript of a new utterance,
               # good or bad, save the information.
               prev_transcript = frame_ret[1]
-              prev_start = frame_ret[2]
+              prev_speaker = frame_ret[2]
             
             # The next activity frame to look for. 
             activity_index += 1
@@ -179,31 +180,100 @@ def _process_skit_video(video_id, video_fpath, game_name):
 
 def _process_frame(video_id, frame, frame_num, video_length, 
                    activity_segments, activity_index, prev_transcript, 
-                   prev_start, last_frame_status, game_name):
+                   prev_speaker, last_frame_status, game_name):
   """
-  Provided the video_id, the full-sized cv2 frame extracted from the
-  source video, the frame number + total frames of the source video,
-  the vad_mask, and current utterance + frame data, process it. 
+  Provided information about the current frame, the current frame
+  itself, as well as information regarding the "current" utterance,
+  process the frame with OCR. Manage and preprocess the result if it
+  is a new utterance. 
 
   Can return in a few ways: 
   - (status,) -> not a new utterance.
-  - (status, prev_transcript, prev_start) -> new utterance (good/bad)
+  - (status, prev_transcript, prev_speaker) -> new utterance (good/bad)
   """
-  roi_frame = _get_frame_region_of_interest(frame, game_name)
-  speaker_frame = _get_frame_speaker_region(frame, game_name)
+  # First, preprocess the frames. Get Regions of Interest and then 
+  # process each region for the stuff we need for OCR.
+  subtitle_roi = _get_frame_region_of_interest(frame, game_name)
+  speaker_roi = _get_frame_speaker_region(frame, game_name)
+  subtitle_roi_preprocessed = _preprocess_frame(subtitle_roi)
+  speaker_roi_preprocessed = _preprocess_frame(speaker_roi)
 
-  # DEBUG ONLY! Visualize the frame and indicate sound activity. 
+  # TODO: Delete me.
+  frame = _preprocess_frame(frame)
+
+  # OCR step. First, read the speaker name. 
+  speaker_name = pytesseract.image_to_string(speaker_roi_preprocessed)
+
+  if speaker_name is None or speaker_name == "":
+    print("[WARNING] Dataset - No speaker found!")
+    _debug_frame_view(speaker_roi_preprocessed, "WARNING - NO SPEAKER FOUND!")
+    return (NO_SPEAKER_FOUND,)
+
+  # If the speaker name is different, we don't even need to compare 
+  # the transcript - we know it's a new utterance. OCR the trancript.
+  # Otherwise if the same speaker, OCR the transcript and compare to
+  # previous transcript. If it's the same, same.
+  new_utterance = None
+  if prev_speaker is None or prev_speaker != speaker_name:
+    new_utterance = True
+
+  subtitles = pytesseract.image_to_string(subtitle_roi_preprocessed)
+
+  # Toss out any frames without subtitles. 
+  if subtitles is None or subtitles == "":
+    print("[WARNING] Dataset - No transcript found!")
+    _debug_frame_view(subtitle_roi_preprocessed, "WARNING - NO TRANSCRIPT FOUND!", "Speaker: %s" % speaker_name)
+    return (NO_TEXT_FOUND,)
+
+  if new_utterance is None:
+    if subtitles != prev_transcript: new_utterance = True
+    else: return (SAME_UTTERANCE,)
+
+  # At this point we know this is now a NEW UTTERANCE. Wrap up the 
+  # previous utterance. Write the wav to file and append the 
+  # transcript to the speaker's transcript file for this video_id. 
+
+  # Now, start a new utterance. Make sure the speaker name is 
+  # whitelisted for this particular game name. If not, alert user.
+  # This is a bad utterance. 
+
+  # If the speaker name is whitelisted, process the transcript with
+  # preprocessing to match LibriSpeech format. If the transcript 
+  # ends up empty, this is a bad utterance.
+
+  # If everything is good up until this point, we're all set. 
+    
   start = activity_segments[activity_index][0]
   end = activity_segments[activity_index][1]
   middle = int(((end - start)//2 ) + start)
-  debug_tuple = (activity_index,start, end, middle, frame_num)
-  #cv2.putText(roi_frame, "AI: %d Start: %d End: %d Middle: %d Frame: %d" % debug_tuple, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 2, cv2.LINE_AA)
-  cv2.imshow("TEST", roi_frame)
+
+  #text_line_1, text_line_2, text_line_3 = None, None, None
+  text_line_1 = "Speaker: \"%s\"" % speaker_name
+  text_line_2 = "Transcript: \"%s\"" % subtitles
+  text_line_3 = "AI: %d Start: %d End: %d Middle: %d Frame: %d" % (activity_index,start, end, middle, frame_num)
+  _debug_frame_view(frame, text_line_1=text_line_1, text_line_2 = text_line_2, text_line_3 = text_line_3)
+
+  return (NO_AUDIO_ACTIVITY,)
+
+def _debug_frame_view(frame, text_line_1 = None, text_line_2 = None, 
+                      text_line_3 = None):
+  """
+  Debugging visualization tool to show what's going on at a given 
+  frame. Can visualize text that you want - up to three optional
+  lines. Blocks the main thread indefinitely. 
+
+  Press "q" to advance. 
+  """
+  if text_line_1 is not None:
+    cv2.putText(frame, text_line_1, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1, cv2.LINE_AA)
+  if text_line_2 is not None:
+    cv2.putText(frame, text_line_2, (50, 70), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1, cv2.LINE_AA)
+  if text_line_3 is not None:
+    cv2.putText(frame, text_line_3, (50, 90), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1, cv2.LINE_AA)
+  cv2.imshow("TEST", frame)
   while(True):
     if cv2.waitKey(10) & 0xFF == ord('q'):
       break
-
-  return (NO_AUDIO_ACTIVITY,)
 
 def _calculate_activity_frames(activity_segments, fps):
   """
@@ -251,6 +321,61 @@ def _calculate_activity_frames(activity_segments, fps):
       assert(False)
 
   return new_activity_segments, activity_segment_middles
+
+
+def _preprocess_frame(frame):
+  """
+  Given a frame, prerocess the frame in preparation for OCR.
+
+  As usual, greyscale the image. Add contrast.
+
+  Note: Does not do ROI processing. See below for those. 
+  Return the processed frame. 
+  """
+  def adjust_gamma(image, gamma=1.0):
+
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255
+      for i in np.arange(0, 256)]).astype("uint8")
+
+    return cv2.LUT(image, table)
+
+  # Convert the frames from BGR to Greyscale. 
+  frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+  alpha = 2.7 # Contrast control (1.0-3.0)
+  beta = 0 # Brightness control (0-100)
+  kernel = np.array([[0, -1, 0],
+                     [-1, 5,-1],
+                     [0, -1, 0]])
+  resize_x = 2
+  resize_y = 2
+  gamma = 0.1
+
+  # Resize image to make it thin. This is surprisingly effective at
+  # reducing variability. 
+  frame = cv2.resize(frame, None, fx=1.0, fy=1.6, interpolation=cv2.INTER_CUBIC)
+  #frame = cv2.resize(frame, None, fx=0.7, fy=0.7, interpolation=cv2.INTER_AREA)
+ 
+  # Apply contrast to the image so we can really REALLY read stuff.
+  frame = cv2.convertScaleAbs(frame, alpha=alpha, beta=beta)
+
+  # Blur
+  #frame = cv2.blur(frame,(2,2))
+
+  # Gamma Correction
+  frame = adjust_gamma(frame, gamma=gamma)
+
+  # Sharpen
+  frame = cv2.filter2D(src=frame, ddepth=-1, kernel=kernel)
+
+  # Blur
+  #frame = cv2.blur(frame,(3,3))
+
+  # Sharpen
+  #frame = cv2.filter2D(src=frame, ddepth=-1, kernel=kernel)
+
+  return frame
 
 def _get_frame_region_of_interest(frame, game_name):
   """

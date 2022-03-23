@@ -10,6 +10,9 @@ Produces audio samples and transcripts of utterances grouped by
 speaker, identified and transcribed via Optical Character 
 Recognition of on-screen texts during ingame "skits".
 
+Data is preprocessed in a manner that makes it a suitable companion 
+for the LibriSpeech dataset.
+
 ------------------------------------------------------------------------------
 Usage:
 ------------------------------------------------------------------------------
@@ -27,6 +30,12 @@ To generate a dataset, make sure to do the following:
 2. Install requirements by running:
 
    pip install -r requirements.txt
+
+3. If you don't have it, install tesseract for your platform and place
+   on the system PATH so that entering "tesseract" in the command line
+   or terminal doesn't throw an error. 
+
+   https://tesseract-ocr.github.io/tessdoc/Home.html
 
 3. Gather data and place in a subfolder called "data" in the repo. 
 
