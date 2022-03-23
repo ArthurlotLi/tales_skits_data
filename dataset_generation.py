@@ -116,11 +116,12 @@ def _process_skit_video(video_id, video_fpath, game_name):
   print("[INFO] Dataset - Video metadata:")
   print("       Video Length (frames): %d" % video_length)
   print("       Video FPS: %d" % video_fps)
+  print("")
 
   # Generate tuples of segments of voice activity, each at most 
   # containing one utterance from one speaker. 
   unbuffered_activity_segments = audio_activity_detection(wav, vad_fpath)
-  activity_segments, activity_frames = _calculate_activity_frames(unbuffered_activity_segments, video_fps)
+  activity_segments, activity_segment_middles = _calculate_activity_frames(unbuffered_activity_segments, video_fps)
 
   # Loop through the video. 
   stop_video = False
@@ -141,8 +142,10 @@ def _process_skit_video(video_id, video_fpath, game_name):
         ret, frame = cap.read() 
 
         if ret:
-          # Determine if this frame is one of our key frames. 
-          if frame_num == activity_frames[activity_index]:
+          # Get current ms since start. If we're >= a middle frame for
+          # our next segment, process this frame. 
+          current_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
+          if current_ms >= activity_segment_middles[activity_index]:
             # Process the frame if we're not skipping it. 
             frame_ret = _process_frame(video_id, frame, frame_num, video_length, 
                                        activity_segments, activity_index, prev_transcript, 
@@ -213,34 +216,40 @@ def _calculate_activity_frames(activity_segments, fps):
   AS WELL as a list of middle frames by itself. These two lists
   should be like indexed. 
   """
-  activity_frames = []
+  activity_segment_middles = []
   new_activity_segments = []
+  total_dropped_segments = 0
   for start, end in activity_segments:
-    middle = ((end - start)//2 ) + start
+    # Preprocessing - if the original length is too short, drop this
+    # activity segment. 
+    segment_length = end-start
+    if segment_length < min_length_of_non_silence:
+      total_dropped_segments  += 1
+      continue
+
+    middle = ((segment_length)//2 ) + start
     start = start - nonsilence_buffer_ms
     end = end + nonsilence_buffer_ms
-    middle_frame = _map_sample_to_frame(middle, fps)
-    activity_frames.append(middle_frame)
+    activity_segment_middles.append(middle)
     new_activity_segments.append((start, end))
 
-  print("DEBUG: Activity frames:")
-  print(activity_frames)
-  
-  # Should be like indexed... sanity check. 
-  assert len(new_activity_segments) == len(activity_frames)
+  print("[DEBUG] Datset - Dropped a total of %d segments with length less than %d ms." % (total_dropped_segments, min_length_of_non_silence))
 
-  return new_activity_segments, activity_frames
+  # Verify that all samples are NON OVERLAPPING, even with the 
+  # buffers in place. 
+  print("[DEBUG] Dataset - Verifying buffered activity segments are all non-overlapping.")
+  for i in range(0, len(new_activity_segments) - 1):
+    first_tuple = new_activity_segments[i]
+    second_tuple = new_activity_segments[i + 1]
 
-def _map_sample_to_frame(sample_num, fps):
-  """
-  Calculate the frame index given the index of a sample.
-  """
-  frame_num = (float(sample_num)/1000 * float(fps))
+    if(first_tuple[1] > second_tuple[0]):
+      print("[ERROR] Dataset - Activity segments overlap detected!! Tuples: ")
+      print(first_tuple)
+      print(second_tuple)
+      print("Aborting!")
+      assert(False)
 
-  frame_num = math.floor(frame_num)
-
-  # Always get the floor of this. This is our integer index. 
-  return frame_num
+  return new_activity_segments, activity_segment_middles
 
 def _get_frame_region_of_interest(frame, game_name):
   """
