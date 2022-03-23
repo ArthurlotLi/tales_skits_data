@@ -198,7 +198,7 @@ def _process_frame(video_id, frame, frame_num, video_length,
   middle = int(((end - start)//2 ) + start)
   debug_tuple = (activity_index,start, end, middle, frame_num)
   #cv2.putText(roi_frame, "AI: %d Start: %d End: %d Middle: %d Frame: %d" % debug_tuple, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 2, cv2.LINE_AA)
-  cv2.imshow("TEST", speaker_frame)
+  cv2.imshow("TEST", roi_frame)
   while(True):
     if cv2.waitKey(10) & 0xFF == ord('q'):
       break

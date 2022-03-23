@@ -36,33 +36,35 @@ min_length_of_non_silence = 0 # Should avoid artifacts. NOTE: Disabled. Better s
 # Region of interest for videos. Where the subtitles + name
 # should appear. Made in terms of percentage of x and y as
 # we have variable resolution data. 
+#
+# DO NOT allow these ROI to ovelap with speakers. 
 subtitle_roi_by_game = {
   "berseria" : {
     "subtitle_roi_x1": .15, # % total resolution from left.
-    "subtitle_roi_y1": .75, # % total resolution from top.
+    "subtitle_roi_y1": .817, # % total resolution from top.
     "subtitle_roi_x2": .10, # % total resolution from right.
     "subtitle_roi_y2": .01, # % total resolution from bottom. 
   },
   "zestiria" : {
     "subtitle_roi_x1": .08, # % total resolution from left.
-    "subtitle_roi_y1": .78, # % total resolution from top.
+    "subtitle_roi_y1": .817, # % total resolution from top.
     "subtitle_roi_x2": .08, # % total resolution from right.
     "subtitle_roi_y2": .00, # % total resolution from bottom. 
   },
   "xillia 1" : {
     "subtitle_roi_x1": .15, # % total resolution from left.
-    "subtitle_roi_y1": .73, # % total resolution from top.
+    "subtitle_roi_y1": .78, # % total resolution from top.
     "subtitle_roi_x2": .15, # % total resolution from right.
     "subtitle_roi_y2": .04, # % total resolution from bottom. 
   },
   "xillia 2" : {
     "subtitle_roi_x1": .15, # % total resolution from left.
-    "subtitle_roi_y1": .73, # % total resolution from top.
+    "subtitle_roi_y1": .78, # % total resolution from top.
     "subtitle_roi_x2": .15, # % total resolution from right.
     "subtitle_roi_y2": .01, # % total resolution from bottom. 
   },
   "vesperia" : {
-    "subtitle_roi_x1": .05, # % total resolution from left.
+    "subtitle_roi_x1": .25, # % total resolution from left.
     "subtitle_roi_y1": .73, # % total resolution from top.
     "subtitle_roi_x2": .03, # % total resolution from right.
     "subtitle_roi_y2": .01, # % total resolution from bottom. 
@@ -70,7 +72,9 @@ subtitle_roi_by_game = {
 }
 
 # Region where the speaker should appear. Made in terms of 
-# percentage of x and y aswe have variable resolution data. 
+# percentage of x and y as we have variable resolution data. 
+#
+# DO NOT allow these to overlap with subtitles.
 speaker_roi_by_game = {
   "berseria" : {
     "subtitle_roi_x1": .15, # % total resolution from left.
