@@ -190,14 +190,15 @@ def _process_frame(video_id, frame, frame_num, video_length,
   - (status, prev_transcript, prev_start) -> new utterance (good/bad)
   """
   roi_frame = _get_frame_region_of_interest(frame, game_name)
+  speaker_frame = _get_frame_speaker_region(frame, game_name)
 
   # DEBUG ONLY! Visualize the frame and indicate sound activity. 
   start = activity_segments[activity_index][0]
   end = activity_segments[activity_index][1]
   middle = int(((end - start)//2 ) + start)
   debug_tuple = (activity_index,start, end, middle, frame_num)
-  cv2.putText(roi_frame, "AI: %d Start: %d End: %d Middle: %d Frame: %d" % debug_tuple, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 2, cv2.LINE_AA)
-  cv2.imshow("TEST", roi_frame)
+  #cv2.putText(roi_frame, "AI: %d Start: %d End: %d Middle: %d Frame: %d" % debug_tuple, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 2, cv2.LINE_AA)
+  cv2.imshow("TEST", speaker_frame)
   while(True):
     if cv2.waitKey(10) & 0xFF == ord('q'):
       break
@@ -266,6 +267,25 @@ def _get_frame_region_of_interest(frame, game_name):
   y1 = int(subtitle_roi_by_game[game_name]["subtitle_roi_y1"] * y_tot)
   x2 = x_tot - int(subtitle_roi_by_game[game_name]["subtitle_roi_x2"] * x_tot)
   y2 = y_tot - int(subtitle_roi_by_game[game_name]["subtitle_roi_y2"] * y_tot)
+
+  roi_frame = frame[y1:y2, x1:x2]
+  return roi_frame
+
+def _get_frame_speaker_region(frame, game_name):
+  """
+  Given a frame, returns the speaker name region. OpenCV stores images
+  in numpy arrays, so this is pretty easy. 
+  """
+  # We expect a tensor (y pixels, x pixels, channels (3 for RGB))
+  # Ex) (1080, 1920, 3)
+  frame_shape = frame.shape
+  y_tot = frame_shape[0]
+  x_tot = frame_shape[1]
+
+  x1 = int(speaker_roi_by_game[game_name]["subtitle_roi_x1"] * x_tot)
+  y1 = int(speaker_roi_by_game[game_name]["subtitle_roi_y1"] * y_tot)
+  x2 = x_tot - int(speaker_roi_by_game[game_name]["subtitle_roi_x2"] * x_tot)
+  y2 = y_tot - int(speaker_roi_by_game[game_name]["subtitle_roi_y2"] * y_tot)
 
   roi_frame = frame[y1:y2, x1:x2]
   return roi_frame

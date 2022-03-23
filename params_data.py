@@ -31,7 +31,7 @@ vad_suffix = ".vad_mask.npy"
 min_silence = 10 # In milliseconds. Lower values are more accurate, but risk excessive OCR processing.
 silence_thresh = 42 # Subtracted from dBFS. Should be as high (low) as possible, since this is CLEAN data. 
 nonsilence_buffer_ms = 5 # A buffer into silence for each segment of activity.
-min_length_of_non_silence = 50 # Should avoid artifacts.
+min_length_of_non_silence = 0 # Should avoid artifacts. NOTE: Disabled. Better safe than sorry. 
 
 # Region of interest for videos. Where the subtitles + name
 # should appear. Made in terms of percentage of x and y as
@@ -66,5 +66,40 @@ subtitle_roi_by_game = {
     "subtitle_roi_y1": .73, # % total resolution from top.
     "subtitle_roi_x2": .03, # % total resolution from right.
     "subtitle_roi_y2": .01, # % total resolution from bottom. 
+  },
+}
+
+# Region where the speaker should appear. Made in terms of 
+# percentage of x and y aswe have variable resolution data. 
+speaker_roi_by_game = {
+  "berseria" : {
+    "subtitle_roi_x1": .15, # % total resolution from left.
+    "subtitle_roi_y1": .75, # % total resolution from top.
+    "subtitle_roi_x2": .50, # % total resolution from right.
+    "subtitle_roi_y2": .175, # % total resolution from bottom. 
+  },
+  "zestiria" : {
+    "subtitle_roi_x1": .08, # % total resolution from left.
+    "subtitle_roi_y1": .78, # % total resolution from top.
+    "subtitle_roi_x2": .50, # % total resolution from right.
+    "subtitle_roi_y2": .176, # % total resolution from bottom. 
+  },
+  "xillia 1" : {
+    "subtitle_roi_x1": .232, # % total resolution from left.
+    "subtitle_roi_y1": .73, # % total resolution from top.
+    "subtitle_roi_x2": .50, # % total resolution from right.
+    "subtitle_roi_y2": .212, # % total resolution from bottom. 
+  },
+  "xillia 2" : {
+    "subtitle_roi_x1": .232, # % total resolution from left.
+    "subtitle_roi_y1": .73, # % total resolution from top.
+    "subtitle_roi_x2": .50, # % total resolution from right.
+    "subtitle_roi_y2": .212, # % total resolution from bottom. 
+  },
+  "vesperia" : {
+    "subtitle_roi_x1": .05, # % total resolution from left.
+    "subtitle_roi_y1": .73, # % total resolution from top.
+    "subtitle_roi_x2": .76, # % total resolution from right.
+    "subtitle_roi_y2": .10, # % total resolution from bottom.
   },
 }
