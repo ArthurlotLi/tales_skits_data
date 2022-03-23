@@ -28,9 +28,9 @@ vad_use_moving_average = False
 vad_window_length = 30 # Milliseconds (10, 20, or 30) - Granularity of the VAD operation
 vad_suffix = ".vad_mask.npy"
 
-min_silence = 300 # In milliseconds. Lower values are more accurate, but risk excessive OCR processing.
+min_silence = 150 # In milliseconds. Lower values are more accurate, but risk excessive OCR processing.
 silence_thresh = 42 # Subtracted from dBFS. Should be as high (low) as possible, since this is CLEAN data. 
-window_length = 30 
+nonsilence_buffer_ms = 160 # A buffer into silence for each segment of activity.
 
 # Region of interest for videos. Where the subtitles + name
 # should appear. Made in terms of percentage of x and y as

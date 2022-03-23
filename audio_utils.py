@@ -4,7 +4,6 @@
 # Utilities to support dataset generation related to processing the
 # audio of video files. 
 
-from pickle import TRUE
 from params_data import *
 
 import struct
@@ -13,7 +12,6 @@ import subprocess
 import numpy as np
 from tqdm import tqdm
 import os
-import librosa
 from pydub import AudioSegment, silence
 
 
@@ -57,78 +55,46 @@ def load_wav(wav_fpath):
   return wav
 
 
-def volume_activity_mask(wav, vad_fpath):
+def audio_activity_detection(wav, vad_fpath):
   """
-  Alternative to Voice Activity mask. Simply flag any non-silences in
-  the video. 
+  Detects ms timestamps of periods of nonsilence in the video. These
+  windows should be small enough to virtually guarantee that the 
+  maximum number of utterances in a period is at most 1. For each
+  tuple, get the (roughly) middle timestamp - this will be used to
+  get a reliable subtitle frame correlated to that utterance (or
+  partial utterance).
   """
   # Returns milliseconds. 
   wav_length = len(wav)
 
-  # Check if the mask has been generated already. If so, just load
+  # Check if the VAD mask has been generated already. If so, just load
   # it. 
   if os.path.exists(vad_fpath):
     print("[INFO] Dataset - Loading existing VAD mask at: %s" % vad_fpath)
     loaded_mask = np.load(vad_fpath)
-    loaded_mask_length = len(loaded_mask)
-    print("[INFO] Dataset - Loaded existing VAD mask with length %d." % loaded_mask_length)
-    if loaded_mask_length != wav_length:
-      print("[WARNING] Dataset - Loaded existing VAD mask length %d does NOT match wav length %d. Overwriting..." % (loaded_mask_length, wav_length))
-    else:
-      return loaded_mask
+    print("[INFO] Dataset - Loaded existing VAD mask with length %d." % len(loaded_mask))
+    return loaded_mask
 
-  # We want a mask for EVERY SINGLE SAMPLE in this wav file. This
-  # allows us to reference the bitmask in the same context as the
-  # wav samples.
   print("[DEBUG] Dataset - Volume Activity Mask Parameters:")
   print("    Wav Length (ms): %d" % wav_length)
   print("    Min Silence (ms): %d" % min_silence)
   print("    Silence Thresh: -%d" % silence_thresh)
-  print("    Mask fpath: \"%s\"" % vad_fpath)
   print("")
 
-  print("[INFO] Dataset - Detecting silence in wav...")
+  print("[INFO] Dataset - Detecting nonsilence in wav...")
   # Use dBFS (Decibels relative to full scale) for (far) better 
   # results. 
   dBFS=wav.dBFS
-  silence_tuples = silence.detect_silence(wav, min_silence_len=min_silence, silence_thresh=dBFS-silence_thresh)
+  activity_tuples = silence.detect_nonsilent(wav, min_silence_len=min_silence, silence_thresh=dBFS-silence_thresh)
 
-  print("[INFO] Dataset - Detected %d periods of silence." % len(silence_tuples))
-
-  print("[INFO] Dataset - Generating audio mask.")
-  audio_mask = []
-  last_j = 0
-  for i in tqdm(range(0, wav_length), desc="Audio ms processed"):
-    wav_sample_added = False
-    for j in range(last_j, len(silence_tuples)):
-      if wav_sample_added is True:
-        break
-      start, end  = silence_tuples[j]
-      # At some point, since we know the silence_tuples is sorted,
-      # when things become infeasible we can skip. 
-      if start > i:
-        audio_mask.append(True)
-        wav_sample_added = True
-      
-      # If we notice an applicable silence tuple, add silence. 
-      elif i <= end and start <= i:
-        audio_mask.append(False)
-        wav_sample_added = True
-        # For next parses, skip all silences prior to this one.
-        last_j = j
-    
-    # For the edge case at the end of the wav.
-    if wav_sample_added is False:
-      audio_mask.append(True)
-
-  print("[INFO] Dataset - Audio mask generated. Length: %d" % len(audio_mask))
+  print("[INFO] Dataset - Detected %d periods of nonsilence." % len(activity_tuples))
 
   # Write to file. 
-  print("[INFO] Dataset - Writing audio mask to file: %s" % vad_fpath)
-  np.save(vad_fpath, audio_mask)
+  print("[INFO] Dataset - Writing to file: %s" % vad_fpath)
+  np.save(vad_fpath, activity_tuples)
 
   # We're done here. Return the audio mask.
-  return audio_mask
+  return activity_tuples
 
 
 def voice_activity_mask(wav, vad_fpath):

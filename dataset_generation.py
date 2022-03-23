@@ -101,14 +101,6 @@ def _process_skit_video(video_id, video_fpath, game_name):
 
   # Load the wav into memory - reample it if necessary. 
   wav = load_wav(wav_fpath)
-  
-  # Generate a bitmask from the audio - a single bit for each sample
-  # via Voice Activity Detection.
-  if use_silence_instead_of_vad:
-    vad_mask = volume_activity_mask(wav, vad_fpath)
-  else:
-    vad_mask = voice_activity_mask(wav, vad_fpath)
-  vad_mask_length = len(vad_mask)
 
   # Attempt to load the video. 
   print("[DEBUG] Dataset - Loading video.")
@@ -120,10 +112,20 @@ def _process_skit_video(video_id, video_fpath, game_name):
   # Get video statistics. We really hope this is correct. If not, then
   # we'll error out.
   video_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+  video_fps = int(cap.get(cv2.CAP_PROP_FPS))
+  print("[INFO] Dataset - Video metadata:")
+  print("       Video Length (frames): %d" % video_length)
+  print("       Video FPS: %d" % video_fps)
+
+  # Generate tuples of segments of voice activity, each at most 
+  # containing one utterance from one speaker. 
+  unbuffered_activity_segments = audio_activity_detection(wav, vad_fpath)
+  activity_segments, activity_frames = _calculate_activity_frames(unbuffered_activity_segments, video_fps)
 
   # Loop through the video. 
   stop_video = False
   stop_video_frame = None # For debug output only. 
+  activity_index = 0
   # Add an additional loop to ensure we reach the end of the video.
   # If we don't, the metadata count is off, for some reason. 
   frames_to_process = video_length +1
@@ -139,10 +141,11 @@ def _process_skit_video(video_id, video_fpath, game_name):
         ret, frame = cap.read() 
 
         if ret:
-          if frame_num % frames_to_skip == 0:
+          # Determine if this frame is one of our key frames. 
+          if frame_num == activity_frames[activity_index]:
             # Process the frame if we're not skipping it. 
             frame_ret = _process_frame(video_id, frame, frame_num, video_length, 
-                                       vad_mask, vad_mask_length, prev_transcript, 
+                                       activity_segments, activity_index, prev_transcript, 
                                        prev_start, last_frame_status, game_name)
             last_frame_status = frame_ret[0]
 
@@ -152,6 +155,10 @@ def _process_skit_video(video_id, video_fpath, game_name):
               # good or bad, save the information.
               prev_transcript = frame_ret[1]
               prev_start = frame_ret[2]
+            
+            # The next activity frame to look for. 
+            activity_index += 1
+              
         else:
           # End of video reached. End the loop. 
           stop_video_frame = frame_num
@@ -167,9 +174,9 @@ def _process_skit_video(video_id, video_fpath, game_name):
   cap.release()
   cv2.destroyAllWindows()
 
-def _process_frame(video_id, frame, frame_num, video_length, vad_mask, 
-                   vad_mask_length, prev_transcript, prev_start, 
-                   last_frame_status, game_name):
+def _process_frame(video_id, frame, frame_num, video_length, 
+                   activity_segments, activity_index, prev_transcript, 
+                   prev_start, last_frame_status, game_name):
   """
   Provided the video_id, the full-sized cv2 frame extracted from the
   source video, the frame number + total frames of the source video,
@@ -179,28 +186,61 @@ def _process_frame(video_id, frame, frame_num, video_length, vad_mask,
   - (status,) -> not a new utterance.
   - (status, prev_transcript, prev_start) -> new utterance (good/bad)
   """
-  frame_sample_index = _map_frame_to_sample(frame_num, video_length, vad_mask_length)
   roi_frame = _get_frame_region_of_interest(frame, game_name)
 
   # DEBUG ONLY! Visualize the frame and indicate sound activity. 
-  cv2.putText(roi_frame, "VAD: %s" % str(vad_mask[frame_sample_index]), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 2, cv2.LINE_AA)
+  start = activity_segments[activity_index][0]
+  end = activity_segments[activity_index][1]
+  middle = int(((end - start)//2 ) + start)
+  debug_tuple = (activity_index,start, end, middle, frame_num)
+  cv2.putText(roi_frame, "AI: %d Start: %d End: %d Middle: %d Frame: %d" % debug_tuple, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 2, cv2.LINE_AA)
   cv2.imshow("TEST", roi_frame)
-  if cv2.waitKey(40) & 0xFF == ord('q'):
-    input()
+  while(True):
+    if cv2.waitKey(10) & 0xFF == ord('q'):
+      break
 
   return (NO_AUDIO_ACTIVITY,)
 
-def _map_frame_to_sample(frame_num, video_length, vad_mask_length):
+def _calculate_activity_frames(activity_segments, fps):
   """
-  Calculate the index of the sample that corresponds to the current
-  frame. 
+  Given tuples of nonsilence in the wav, for each tuple, get the
+  millisecond timestamp of the (rough) middle for a reliable frame
+  showing utterance subtitles. Also add a buffer to each start and 
+  end. 
+
+  Return BOTH final activity frames tuples, each item being:
+  (start (ms buffered), end (ms buffered), middle_frame)
+  AS WELL as a list of middle frames by itself. These two lists
+  should be like indexed. 
   """
-  frame_sample_index = vad_mask_length * frame_num
-  frame_sample_index = frame_sample_index / video_length
+  activity_frames = []
+  new_activity_segments = []
+  for start, end in activity_segments:
+    middle = ((end - start)//2 ) + start
+    start = start - nonsilence_buffer_ms
+    end = end + nonsilence_buffer_ms
+    middle_frame = _map_sample_to_frame(middle, fps)
+    activity_frames.append(middle_frame)
+    new_activity_segments.append((start, end))
+
+  print("DEBUG: Activity frames:")
+  print(activity_frames)
+  
+  # Should be like indexed... sanity check. 
+  assert len(new_activity_segments) == len(activity_frames)
+
+  return new_activity_segments, activity_frames
+
+def _map_sample_to_frame(sample_num, fps):
+  """
+  Calculate the frame index given the index of a sample.
+  """
+  frame_num = (float(sample_num)/1000 * float(fps))
+
+  frame_num = math.floor(frame_num)
 
   # Always get the floor of this. This is our integer index. 
-  frame_sample_index = math.floor(frame_sample_index)
-  return frame_sample_index
+  return frame_num
 
 def _get_frame_region_of_interest(frame, game_name):
   """
