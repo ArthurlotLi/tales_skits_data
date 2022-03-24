@@ -73,9 +73,9 @@ def audio_activity_detection(wav, vad_fpath):
     return loaded_mask
 
   print("[DEBUG] Dataset - Volume Activity Mask Parameters:")
-  print("        Wav Length (ms): %d" % wav_length)
-  print("        Min Silence (ms): %d" % min_silence)
-  print("        Silence Thresh: -%d" % silence_thresh)
+  print("                  Wav Length (ms): %d" % wav_length)
+  print("                  Min Silence (ms): %d" % min_silence)
+  print("                  Silence Thresh: -%d" % silence_thresh)
   print("")
 
   print("[INFO] Dataset - Detecting nonsilence in wav...")

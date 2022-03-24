@@ -33,6 +33,13 @@ silence_thresh = 42 # Subtracted from dBFS. Should be as high (low) as possible,
 nonsilence_buffer_ms = 5 # A buffer into silence for each segment of activity.
 min_length_of_non_silence = 0 # Should avoid artifacts. NOTE: Disabled. Better safe than sorry. 
 
+# Threshold between 0 and 1 under which, if the subtitles of the 
+# previous OCR prediction matches the current, the current will 
+# be assumed to be different. Above this threshold, a warning
+# will be issued to the user.
+subtitle_variance_thresh = 0.40
+subtitle_variance_acceptable_thresh = 0.00001 # Acceptable deviation.
+
 # Region of interest for videos. Where the subtitles + name
 # should appear. Made in terms of percentage of x and y as
 # we have variable resolution data. 
@@ -107,3 +114,4 @@ speaker_roi_by_game = {
     "subtitle_roi_y2": .10, # % total resolution from bottom.
   },
 }
+
