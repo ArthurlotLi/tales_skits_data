@@ -92,3 +92,12 @@ def audio_activity_detection(wav, vad_fpath):
 
   # We're done here. Return the audio mask.
   return activity_tuples
+
+
+def extract_new_wav(original, start, end, fpath):
+  """
+  Provided an original wav file, the ms timestamps of the subset, as
+  well as the fpath to save to (full, including .wav extension), write.
+  """
+  new_audio = original[start:end]
+  new_audio.export(fpath, format=output_format)

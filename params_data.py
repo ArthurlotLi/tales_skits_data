@@ -4,7 +4,8 @@
 # Configurable parameters for dataset generation.
 
 data_folder = "./data_test"
-output_folder = "./TalesSkits"
+output_folder = "./TalesSkits/full"
+output_format = "wav"
 
 # Used in trim_long_silences - largest number in int16.
 int16_max = (2 ** 15) - 1
@@ -37,7 +38,7 @@ min_length_of_non_silence = 0 # Should avoid artifacts. NOTE: Disabled. Better s
 # previous OCR prediction matches the current, the current will 
 # be assumed to be different. Above this threshold, a warning
 # will be issued to the user.
-subtitle_variance_thresh = 0.40
+subtitle_variance_thresh = 0.45
 subtitle_variance_acceptable_thresh = 0.00001 # Acceptable deviation.
 
 # Region of interest for videos. Where the subtitles + name

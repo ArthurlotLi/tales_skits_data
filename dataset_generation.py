@@ -21,11 +21,12 @@
 # Ensure that audio configuration hyperparameters match those of the
 # project that you want to apply this dataset to. 
 
-from statistics import variance
-from tkinter import FALSE
 from params_data import *
 from audio_utils import *
+from text_cleaner import *
+from speaker_whitelist import speaker_whitelist
 
+from typing import Optional
 import pytesseract
 import cv2
 import os
@@ -41,7 +42,7 @@ DROP_UTTERANCE = 5
 NEW_UTTERANCE_BAD = 6 # A valid utterance, but not accepted transcript. (unknown speaker, bad text)
 NEW_UTTERANCE_GOOD = 7 # A new utterance. 
 
-def extract_tales_skits():
+def extract_tales_skits(visualization: Optional[bool] = False):
   """
   Principal function extracting utterances by speaker with transcripts
   from Tales of video game skit recordings. 
@@ -65,7 +66,7 @@ def extract_tales_skits():
     video_fpath = data_folder + "/" + video_filename
     game_name = _determine_game_title(video_filename)
     print("\n[INFO] Dataset - Processing video id %d for %s skits from file: \"%s\"" % (video_id, game_name, video_fpath))
-    _process_skit_video(video_id, video_fpath, game_name)
+    _process_skit_video(video_id, video_fpath, game_name, visualization)
 
 def _determine_game_title(filename):
   """
@@ -77,7 +78,7 @@ def _determine_game_title(filename):
     if game_name in lower_filename:
       return game_name
 
-def _process_skit_video(video_id, video_fpath, game_name):
+def _process_skit_video(video_id, video_fpath, game_name, visualization):
   """
   Processes an entire skit video. For each selected frame in the video,
   takes the following steps:
@@ -120,13 +121,24 @@ def _process_skit_video(video_id, video_fpath, game_name):
   video_fps = int(cap.get(cv2.CAP_PROP_FPS))
   print("[INFO] Dataset - Video metadata:")
   print("                 Video Length (frames): %d" % video_length)
-  print("                 Video FPS: %d" % video_fps)
+  print("                 Video FPS: %.4f" % video_fps)
   print("")
 
   # Generate tuples of segments of voice activity, each at most 
   # containing one utterance from one speaker. 
   unbuffered_activity_segments = audio_activity_detection(wav, vad_fpath)
   activity_segments, activity_segment_middles = _calculate_activity_frames(unbuffered_activity_segments, video_fps)
+
+  statistics = {
+    "successful_utterances": 0,
+    "total_dropped":0,
+    "total_discrepancies": 0,
+    "total_no_speaker": 0,
+    "total_no_transcript":0,
+    "total_cleaner": 0,
+  }
+  speaker_blacklist = []
+  speaker_indices = {}
 
   # Loop through the video. 
   stop_video = False
@@ -142,13 +154,7 @@ def _process_skit_video(video_id, video_fpath, game_name):
     prev_speaker = None
     prev_drop_utterance = False
     prev_start = None
-    statistics = {
-      "successful_utterances": 0,
-      "total_dropped":0,
-      "total_discrepancies": 0,
-      "total_no_speaker": 0,
-      "total_no_transcript":0,
-    }
+    cleaner = Cleaner()
 
     for frame_num in tqdm(range(0, frames_to_process), desc="Video Frames Processed", total=frames_to_process):
       if stop_video is False:
@@ -163,21 +169,23 @@ def _process_skit_video(video_id, video_fpath, game_name):
           current_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
           if activity_index < len(activity_segment_middles) and current_ms >= activity_segment_middles[activity_index]:
             # Process the frame if we're not skipping it. 
-            frame_ret = _process_frame(video_id, frame, frame_num, video_length, 
+            frame_ret = _process_frame(wav, video_id, frame, frame_num, video_length, 
                                        activity_segments, activity_index, prev_transcript, 
                                        prev_speaker, prev_drop_utterance, prev_start, game_name,
-                                       statistics)
+                                       statistics, speaker_blacklist, speaker_indices, cleaner, visualization)
             statistics = frame_ret[0]
-            last_frame_status = frame_ret[1]
-            prev_drop_utterance = frame_ret[2]
-            prev_start = frame_ret[3]
+            speaker_blacklist = frame_ret[1]
+            speaker_indices = frame_ret[2]
+            last_frame_status = frame_ret[3]
+            prev_drop_utterance = frame_ret[4]
+            prev_start = frame_ret[5]
 
             # Depending on the ret, change behavior. 
             if last_frame_status == NEW_UTTERANCE_BAD or last_frame_status == NEW_UTTERANCE_GOOD:
               # If we successfully read the transcript of a new utterance,
               # good or bad, save the information.
-              prev_transcript = frame_ret[4]
-              prev_speaker = frame_ret[5]
+              prev_transcript = frame_ret[6]
+              prev_speaker = frame_ret[7]
             
             # The next activity frame to look for. 
             activity_index += 1
@@ -201,11 +209,15 @@ def _process_skit_video(video_id, video_fpath, game_name):
   for key in statistics:
     print("                 %s: %d" % (key, statistics[key]))
   print("")
+  print("[INFO] Dataset - Blacklisted speakers:")
+  print(speaker_blacklist)
+  print("")
 
-def _process_frame(video_id, frame, frame_num, video_length, 
+def _process_frame(wav, video_id, frame, frame_num, video_length, 
                    activity_segments, activity_index, prev_transcript, 
                    prev_speaker, prev_drop_utterance, prev_start, game_name,
-                   statistics):
+                   statistics, speaker_blacklist, speaker_indices, cleaner,
+                   visualization=False):
   """
   Provided information about the current frame, the current frame
   itself, as well as information regarding the "current" utterance,
@@ -223,8 +235,8 @@ def _process_frame(video_id, frame, frame_num, video_length,
   subtitle_roi_preprocessed = _preprocess_frame(subtitle_roi)
   speaker_roi_preprocessed = _preprocess_frame(speaker_roi)
 
-  # TODO: Delete me.
-  #frame = _preprocess_frame(frame)
+  # Show the entire preprocessed frame if visualizing.
+  if visualization: frame = _preprocess_frame(frame)
 
   new_utterance = None
   drop_current_utterance = False
@@ -232,14 +244,15 @@ def _process_frame(video_id, frame, frame_num, video_length,
   # OCR. First, read the speaker name. Preprocess the name so
   # that we can look it up in the game's speaker name whitelist. 
   speaker_name = pytesseract.image_to_string(speaker_roi_preprocessed)
-  speaker_name = speaker_name.replace("\n", "").lower()
+  speaker_name, drop_current_utterance,cleaner_dropped = cleaner.preprocess_text(speaker_name, drop_current_utterance)
+  if cleaner_dropped: statistics["total_cleaner"] += 1
 
   # If no speaker is found, this is considered a NEW utterance and
   # the previous utterance (if present) to be complete. 
   if speaker_name is None or speaker_name == "":
     print("\n[WARNING] Dataset - No speaker found!")
-    #_debug_frame_view(frame, "WARNING - NO SPEAKER FOUND!")
     speaker_name = ""
+    if visualization: _debug_frame_view(frame, "New (%s): \"%s\"" % (speaker_name, ""), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - NO SPEAKER FOUND!")
     new_utterance = True
     drop_current_utterance = True
     statistics["total_no_speaker"] += 1
@@ -252,19 +265,21 @@ def _process_frame(video_id, frame, frame_num, video_length,
     new_utterance = True
 
   subtitles = pytesseract.image_to_string(subtitle_roi_preprocessed)
+  subtitles, drop_current_utterance, cleaner_dropped = cleaner.preprocess_text(subtitles, drop_current_utterance)
+  if cleaner_dropped: statistics["total_cleaner"] += 1
 
   # Toss out any frames without subtitles. 
   if subtitles is None or subtitles == "":
     # Warn the user. But if we already know this utterance is bad, do
     # not bother the user - we ale already treating this utterance as
     # a new, bad utterance.
+    subtitles = ""
     if drop_current_utterance is False:
       print("\n[WARNING] Dataset - No transcript found!")
-      #_debug_frame_view(frame, "WARNING - NO TRANSCRIPT FOUND!", "Speaker: %s" % speaker_name)
-      subtitles = ""
-      new_utterance = True
-      drop_current_utterance = True
+      if visualization: _debug_frame_view(frame, "New (%s): \"%s\"" % (speaker_name, subtitles), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - NO TRANSCRIPT FOUND!")
       statistics["total_no_transcript"] += 1
+    new_utterance = True
+    drop_current_utterance = True
 
   if new_utterance is None:
     # Time to compare transcripts. We will specifically parse the % that
@@ -280,26 +295,36 @@ def _process_frame(video_id, frame, frame_num, video_length,
     else:
       new_utterance = False
       # Don't bother check if we already know this utterrance is corrupted. 
-      if prev_drop_utterance is False and variance_from_prev_transcript <= 1.0 - subtitle_variance_acceptable_thresh:
-        print("\n[WARNING] Dataset - Potential discrepancy found! Prev start: %d" % prev_start)
-        print("                    Prev (%s): \"%s\"" % (prev_speaker, prev_transcript.replace("\n", " ")))
-        print("                    Current (%s): \"%s\"" % (speaker_name, subtitles.replace("\n", " ")))
-        print("                    Similarity: %.2f" % variance_from_prev_transcript)
-        #_debug_frame_view(frame, "WARNING - %.2f MATCH!" % variance_from_prev_transcript, "Prev: \"%s\"" % prev_transcript, "Current: \"%s\"" % subtitles)
+      if variance_from_prev_transcript <= 1.0 - subtitle_variance_acceptable_thresh:
+        if prev_drop_utterance is False:
+          print("\n[WARNING] Dataset - Potential discrepancy found! Prev start: %d" % prev_start)
+          print("                    Prev (%s): \"%s\"" % (prev_speaker, prev_transcript.replace("\n", " ")))
+          print("                    Current (%s): \"%s\"" % (speaker_name, subtitles.replace("\n", " ")))
+          print("                    Similarity: %.2f" % variance_from_prev_transcript)
+          if visualization: _debug_frame_view(frame, "New (%s): \"%s\"" % (speaker_name, subtitles), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - %.2f MATCH!" % variance_from_prev_transcript)
+          statistics["total_discrepancies"] += 1
 
         # We don't consider this to be a new utterance if this is the case. 
         # Mark the current utterance as corrupted and continue looking
         # for it, so we know when it ends. 
         drop_current_utterance = True
-        statistics["total_discrepancies"] += 1
+
+  # Make sure the speaker name is whitelisted for this particular 
+  # game name. If not, alert user (if first occurence). This is 
+  # a bad utterance. 
+  if speaker_name != "" and speaker_name not in speaker_whitelist[game_name]:
+    if speaker_name not in speaker_blacklist:
+      print("\n[INFO] Dataset - Encountered non-whitelisted character %s." % speaker_name)
+      speaker_blacklist.append(speaker_name)
+    drop_current_utterance = True
 
   if new_utterance is False:
     # Manage the possibility of a corrupted utterance. In this case,
     # (discrepancy with text), turn on drop flag. 
     if drop_current_utterance is True:
-      return(statistics, DROP_UTTERANCE, True, prev_start, subtitles, speaker_name)
+      return(statistics,speaker_blacklist, speaker_indices, DROP_UTTERANCE, True, prev_start, subtitles, speaker_name)
     else:
-      return(statistics, SAME_UTTERANCE, prev_drop_utterance, prev_start)
+      return(statistics, speaker_blacklist, speaker_indices, SAME_UTTERANCE, prev_drop_utterance, prev_start)
 
   # At this point we KNOW this is now a NEW UTTERANCE. Wrap up the 
   # previous utterance. Write the wav to file and append the 
@@ -308,17 +333,33 @@ def _process_frame(video_id, frame, frame_num, video_length,
   complete_utterance_end = activity_segments[activity_index-1][1]
   complete_utterance_speaker = prev_speaker
   if not prev_drop_utterance or drop_current_utterance:
-    complete_utterance_transcript = prev_transcript
+    # Skip the first period of silence.
+    if complete_utterance_speaker is not None:
 
-    statistics["successful_utterances"] += 1
+      # TODO: Use the transcript, saving it properly. 
+      complete_utterance_transcript = prev_transcript
+
+      if complete_utterance_speaker not in speaker_indices:
+        speaker_indices[complete_utterance_speaker] = 0
+      else:
+        speaker_indices[complete_utterance_speaker] += 1
+
+      # EX: TalesSkits/full / VELVET / 1 / VELVET-1-0001
+      new_wav_fpath = output_folder + "/" + complete_utterance_speaker + "/" + str(video_id)
+      os.makedirs(new_wav_fpath, exist_ok=True)
+      new_wav_fpath += "/" + complete_utterance_speaker + "-" + str(video_id) + "-" + f'{speaker_indices[complete_utterance_speaker]:04}.' + output_format
+
+      # Process. 
+      extract_new_wav(original = wav,
+                      start = complete_utterance_start,
+                      end = complete_utterance_end,
+                      fpath = new_wav_fpath)
+
+      statistics["successful_utterances"] += 1
   else:
     print("\n[DEBUG] Dataset - Dropped utterance (%s) with range: %d - %d" 
       % (complete_utterance_speaker, complete_utterance_start, complete_utterance_end))
     statistics["total_dropped"] += 1
-
-  # Now, start a new utterance. Make sure the speaker name is 
-  # whitelisted for this particular game name. If not, alert user.
-  # This is a bad utterance. 
 
 
   # If the speaker name is whitelisted, process the transcript with
@@ -328,18 +369,19 @@ def _process_frame(video_id, frame, frame_num, video_length,
   # If everything is good up until this point, we're all set. 
     
   start = activity_segments[activity_index][0]
-  #end = activity_segments[activity_index][1]
-  #middle = int(((end - start)//2 ) + start)
+  if visualization: 
+    end = activity_segments[activity_index][1]
+    middle = int(((end - start)//2 ) + start)
 
-  #text_line_1, text_line_2, text_line_3 = None, None, None
-  #text_line_1 = "New (%s): \"%s\"" % (speaker_name, subtitles)
-  #text_line_3 = "AI: %d Start: %d End: %d Middle: %d Frame: %d" % (activity_index,start, end, middle, frame_num)
-  #if prev_start is not None and prev_speaker is not None:
-    #text_line_2 = "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript)
-    #text_line_3 = "Prev Drop: %s | Prev Start: %d | Prev End: %d" % (str(prev_drop_utterance), prev_start, activity_segments[activity_index-1][1])
-  #_debug_frame_view(frame, text_line_1=text_line_1, text_line_2 = text_line_2, text_line_3 = text_line_3)
+    text_line_1, text_line_2, text_line_3 = None, None, None
+    text_line_1 = "New (%s): \"%s\"" % (speaker_name, subtitles)
+    if prev_start is not None and prev_speaker is not None:
+      text_line_2 = "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript)
+      info_tuple = (str(prev_drop_utterance), prev_start, activity_segments[activity_index-1][1], activity_index,start, end, middle, frame_num)
+      text_line_3 = "Prev Drop: %s | Prev Start: %d | Prev End: %d | AI: %d | Start: %d | End: %d | Middle: %d | Frame: %d" % info_tuple
+    _debug_frame_view(frame, text_line_1=text_line_1, text_line_2 = text_line_2, text_line_3 = text_line_3)
 
-  return(statistics, NEW_UTTERANCE_GOOD, drop_current_utterance, start, subtitles, speaker_name)
+  return(statistics, speaker_blacklist, speaker_indices, NEW_UTTERANCE_GOOD, drop_current_utterance, start, subtitles, speaker_name)
 
 def _debug_frame_view(frame, text_line_1 = None, text_line_2 = None, 
                       text_line_3 = None):
@@ -356,7 +398,7 @@ def _debug_frame_view(frame, text_line_1 = None, text_line_2 = None,
     cv2.putText(frame, text_line_2, (50, 70), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1, cv2.LINE_AA)
   if text_line_3 is not None:
     cv2.putText(frame, text_line_3, (50, 90), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1, cv2.LINE_AA)
-  cv2.imshow("TEST", frame)
+  cv2.imshow("TalesSkits Dataset Generation | Debug Frame | Press q to continue", frame)
   while(True):
     if cv2.waitKey(10) & 0xFF == ord('q'):
       break
@@ -503,4 +545,5 @@ def _get_frame_speaker_region(frame, game_name):
 
 # When we run, just head right into generation. 
 if __name__ == "__main__":
-  extract_tales_skits()
+  visualization = False
+  extract_tales_skits(visualization)
