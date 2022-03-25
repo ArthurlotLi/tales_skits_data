@@ -264,7 +264,7 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
             speaker_transcripts = transcripts[speaker_name][0]
             removed = False
             for i in range(0, len(speaker_transcripts)):
-              if removed_file == speaker_transcripts[i][0]:
+              if removed_file == speaker_transcripts[i][0] + "." + output_format:
                 del speaker_transcripts[i]
                 removed_transcripts += 1
                 removed = True
