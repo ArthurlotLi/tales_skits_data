@@ -17,6 +17,12 @@ speaker_whitelist = {
     "MAGILOU",
     "BIENFU",
     "ZAVEID",
+    "GRIMOIRH",
+    "DYLE",
+    "KAMOANA",
+    "KUROGANE",
+    "BENWICK",
+    "TERESA",
   ],
   "zestiria" : [
     "SOREY",

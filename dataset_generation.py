@@ -26,6 +26,8 @@ from audio_utils import *
 from text_cleaner import *
 from speaker_whitelist import speaker_whitelist
 
+from multiprocessing import Pool
+from functools import partial
 from typing import Optional
 import pytesseract
 import cv2
@@ -60,14 +62,20 @@ def extract_tales_skits(visualization: Optional[bool] = False):
 
   data_count = len(video_files)
   print("[INFO] Dataset - found %d %s files in folder %s." % (data_count, video_suffix, data_folder))
-  for video_id in range(initial_video_id_index, data_count+initial_video_id_index):
-    
+
+  video_infos = []
+  for video_id in range(initial_video_id_index, data_count+initial_video_id_index):   
     # TODO: Implement multiprocessing and use batches. 
     video_filename = video_files[video_id-initial_video_id_index]
     video_fpath = data_folder + "/" + video_filename
     game_name = _determine_game_title(video_filename)
-    print("\n[INFO] Dataset - Processing video id %d for %s skits from file: \"%s\"" % (video_id, game_name, video_fpath))
-    _process_skit_video(video_id, video_fpath, game_name, visualization)
+
+    video_infos.append((video_id, video_fpath, game_name))
+  
+  # Multiprocessing. 
+  func = partial(_process_skit_video, visualization=visualization)
+  job = Pool(n_processes).imap(func, video_infos)
+  list(tqdm(job, "Videos Processed", len(video_infos), unit = "video"))
 
 def _determine_game_title(filename):
   """
@@ -79,7 +87,7 @@ def _determine_game_title(filename):
     if game_name in lower_filename:
       return game_name
 
-def _process_skit_video(video_id, video_fpath, game_name, visualization):
+def _process_skit_video(video_info, visualization):
   """
   Processes an entire skit video. For each selected frame in the video,
   takes the following steps:
@@ -99,6 +107,10 @@ def _process_skit_video(video_id, video_fpath, game_name, visualization):
        c. Append the transcript to the transcript file of the speaker
           for this video_id. If it is not found, create it. 
   """
+  video_id = video_info[0]
+  video_fpath = video_info[1]
+  game_name = video_info[2]
+  print("\n[INFO] Dataset - Processing video id %d for %s skits from file: \"%s\"" % (video_id, game_name, video_fpath))
   wav_fpath = video_fpath.replace(video_suffix, audio_suffix)
   vad_fpath = video_fpath.replace(video_suffix, vad_suffix)
 
@@ -157,7 +169,8 @@ def _process_skit_video(video_id, video_fpath, game_name, visualization):
     prev_start = None
     cleaner = Cleaner(game_name)
 
-    for frame_num in tqdm(range(0, frames_to_process), desc="Video Frames Processed", total=frames_to_process):
+    #for frame_num in tqdm(range(0, frames_to_process), desc="Video Frames Processed", total=frames_to_process):
+    for frame_num in range(0, frames_to_process):
       if stop_video is False:
         # We read in every single frame to be absolutely sure that we
         # are not missing any frames with audio activity. 
@@ -213,6 +226,16 @@ def _process_skit_video(video_id, video_fpath, game_name, visualization):
   print("[INFO] Dataset - Blacklisted speakers:")
   print(speaker_blacklist)
   print("")
+
+  # Write info to file and exit. 
+  f = open(output_folder + "video_" + str(video_id) + "_info.txt", "w")
+  f.write("Statistics:\n")
+  for key in statistics:
+    f.write("  %s: %d\n" % (key, statistics[key]))
+  f.write("\n")
+  f.write("Blacklisted Speakers:\n")
+  for speaker in speaker_blacklist:
+    f.write("  %s\n" % speaker)
 
 def _process_frame(wav, video_id, frame, frame_num, video_length, 
                    activity_segments, activity_index, prev_transcript, 
@@ -383,7 +406,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
       text_line_2 = "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript)
       info_tuple = (str(prev_drop_utterance), prev_start, activity_segments[activity_index-1][1], activity_index,start, end, middle, frame_num)
       text_line_3 = "Prev Drop: %s | Prev Start: %d | Prev End: %d | AI: %d | Start: %d | End: %d | Middle: %d | Frame: %d" % info_tuple
-    _debug_frame_view(frame, text_line_1=text_line_1, text_line_2 = text_line_2, text_line_3 = text_line_3)
+    _debug_frame_view(subtitle_roi_preprocessed, text_line_1=text_line_1, text_line_2 = text_line_2, text_line_3 = text_line_3)
 
   return(statistics, speaker_blacklist, speaker_indices, NEW_UTTERANCE_GOOD, drop_current_utterance, start, subtitles, speaker_name)
 
@@ -528,6 +551,24 @@ def _preprocess_frame(frame,game_name, subtitles = False):
 
     # Sharpen
     #frame = cv2.filter2D(src=frame, ddepth=-1, kernel=kernel)
+  elif game_name == "vesperia":
+    # Resize image to make it thin. This is surprisingly effective at
+    # reducing variability. 
+    frame = cv2.resize(frame, None, fx=1.0, fy=1.6, interpolation=cv2.INTER_CUBIC)
+    #frame = cv2.resize(frame, None, fx=0.7, fy=0.7, interpolation=cv2.INTER_AREA)
+  
+    # Apply contrast to the image so we can really REALLY read stuff.
+    frame = cv2.convertScaleAbs(frame, alpha=2.7, beta=0)
+
+    # Blur
+    #frame = cv2.blur(frame,(2,2))
+
+    # Gamma Correction
+    frame = adjust_gamma(frame, gamma=0.5)
+
+    # Sharpen
+    frame = cv2.filter2D(src=frame, ddepth=-1, kernel=kernel)
+
   else:
     print("[ERROR] Dataset - preprocess_frame received an unknown game name! %s" % game_name)
     assert(False)
