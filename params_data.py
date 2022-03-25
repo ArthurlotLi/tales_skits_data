@@ -42,7 +42,7 @@ min_length_of_non_silence = 0 # Should avoid artifacts. NOTE: Disabled. Better s
 # previous OCR prediction matches the current, the current will 
 # be assumed to be different. Above this threshold, a warning
 # will be issued to the user.
-subtitle_variance_thresh = 0.45
+subtitle_variance_thresh = 0.55
 subtitle_variance_acceptable_thresh = 0.00001 # Acceptable deviation.
 
 # Region of interest for videos. Where the subtitles + name
@@ -89,9 +89,9 @@ subtitle_roi_by_game = {
 # DO NOT allow these to overlap with subtitles.
 speaker_roi_by_game = {
   "berseria" : {
-    "subtitle_roi_x1": .15, # % total resolution from left.
-    "subtitle_roi_y1": .75, # % total resolution from top.
-    "subtitle_roi_x2": .50, # % total resolution from right.
+    "subtitle_roi_x1": .18, # % total resolution from left.
+    "subtitle_roi_y1": .77, # % total resolution from top.
+    "subtitle_roi_x2": .68, # % total resolution from right.
     "subtitle_roi_y2": .175, # % total resolution from bottom. 
   },
   "zestiria" : {
@@ -103,13 +103,13 @@ speaker_roi_by_game = {
   "xillia 1" : {
     "subtitle_roi_x1": .232, # % total resolution from left.
     "subtitle_roi_y1": .73, # % total resolution from top.
-    "subtitle_roi_x2": .50, # % total resolution from right.
+    "subtitle_roi_x2": .66, # % total resolution from right.
     "subtitle_roi_y2": .212, # % total resolution from bottom. 
   },
   "xillia 2" : {
     "subtitle_roi_x1": .232, # % total resolution from left.
     "subtitle_roi_y1": .73, # % total resolution from top.
-    "subtitle_roi_x2": .50, # % total resolution from right.
+    "subtitle_roi_x2": .66, # % total resolution from right.
     "subtitle_roi_y2": .212, # % total resolution from bottom. 
   },
   "vesperia" : {

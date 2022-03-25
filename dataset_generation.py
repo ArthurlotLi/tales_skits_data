@@ -71,13 +71,6 @@ def extract_tales_skits(visualization: Optional[bool] = False,
     video_fpath = data_folder + "/" + video_filename
     game_name = _determine_game_title(video_filename)
 
-    # Create wav files synchronously. This avoids an issue where wavs
-    # are not processed correctly and cut off way before the video
-    # finishes. We will double-check the wav file has been created
-    # in the process skit video method. 
-    wav_fpath = video_fpath.replace(video_suffix, audio_suffix)
-    if create_wav_file(video_fpath, wav_fpath) is False: return
-
     if multiprocessing:
       video_infos.append((video_id, video_fpath, game_name))
     else:
@@ -451,7 +444,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
       text_line_2 = "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript)
       info_tuple = (str(prev_drop_utterance), prev_start, activity_segments[activity_index-1][1], activity_index,start, end, middle, frame_num)
       text_line_3 = "Prev Drop: %s | Prev Start: %d | Prev End: %d | AI: %d | Start: %d | End: %d | Middle: %d | Frame: %d" % info_tuple
-    _debug_frame_view(frame, text_line_1=text_line_1, text_line_2 = text_line_2, text_line_3 = text_line_3)
+    _debug_frame_view(speaker_roi_preprocessed, text_line_1=text_line_1, text_line_2 = text_line_2, text_line_3 = text_line_3)
 
   return(statistics, speaker_blacklist, speaker_indices, NEW_UTTERANCE_GOOD, drop_current_utterance, start, subtitles, speaker_name)
 

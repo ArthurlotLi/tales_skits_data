@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
-Tales of Voice Actor Data
+Tales of Skits Data
 Dataset Collection Tools
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
@@ -37,7 +37,7 @@ To generate a dataset, make sure to do the following:
 
    https://tesseract-ocr.github.io/tessdoc/Home.html
 
-3. Gather data and place in a subfolder called "data" in the repo. 
+3. Gather .mp4 files and place in a subfolder called "data" in the repo.
 
 4. Run dataset_generation.py. Output data will be placed in a folder
    titled "TalesSkits".

@@ -85,6 +85,13 @@ class Cleaner:
       # similar to "1"s.
       processed_text = processed_text.replace("1", "I")
 
+    # Some final preprocessing for common OCR mess-ups.
+    processed_text = processed_text.replace("L'M", "I'M")
+    processed_text = processed_text.replace("L'D", "I'D")
+    processed_text = processed_text.replace("T'M", "I'M")
+    processed_text = processed_text.replace("T'D", "I'D")
+    processed_text = processed_text.replace("DONT", "DON'T")
+
     return str(processed_text), drop_current_utterance, cleaner_dropped
 
   def _replace_up_to_x_repeated(self, repeated_char, x, text):
