@@ -23,8 +23,9 @@ _symbols_re = re.compile(r"[^\w|\s|'|.|,|!|?]")
 class Cleaner: 
   _last_message = ""
 
-  def __init__(self, game_name):
+  def __init__(self, game_name,multiprocessing):
     self.game_name = game_name
+    self.multiprocessing = multiprocessing
 
   def preprocess_text(self, original_text, drop_current_utterance):
     """
@@ -49,6 +50,7 @@ class Cleaner:
     if drop_current_utterance is False and "*" in original_text:
       message_to_print = "[WARNING] Text Cleaner - Submitted text contains \"*\" symbol. Marking as invalid.\n"
       message_to_print += "                         Text: \"%s\"" % original_text.replace("\n", "")
+      if not self.multiprocessing: message_to_print = "\n" + message_to_print
       if message_to_print != self._last_message:
         print(message_to_print)
         self._last_message = message_to_print
@@ -58,6 +60,7 @@ class Cleaner:
     if drop_current_utterance is False and re.search(_stutter_re,original_text) is not None:
       message_to_print = "[WARNING] Text Cleaner - Submitted text contains \"[A-Z]-[A-Z]\" (stutter). Marking as invalid.\n"
       message_to_print += "                         Text: \"%s\"" % original_text.replace("\n", "")
+      if not self.multiprocessing: message_to_print = "\n" + message_to_print
       if message_to_print != self._last_message:
         print(message_to_print)
         self._last_message = message_to_print
@@ -107,11 +110,3 @@ class Cleaner:
 
   def _convert_to_ascii(self, text):
     return unidecode(text)
-
-
-# For debug purposes only. 
-if __name__ == "__main__":
-  solution = preprocess_text("‘’ “”                         ‟ 🙶 🙷.......?!!@?JFIOJ#asefasef!)(@&#)(%)#*(()!#()$%*)(!()@#%$(~!@!@$#!@#??/!!@)#%_*(@^@&#$*($)_@!$)@!&%$*()!@*$@!$!@$@!$@(!.HELLO!@#$%&^!,...,..../??!@#@!@?#$@!J#@!#@!?!!!...", False)
-  # Expect: Solution: ("'' .JFIOJASEFASEF.HELLO.J.", True)
-  print("\nSolution: ", end="")
-  print(solution)

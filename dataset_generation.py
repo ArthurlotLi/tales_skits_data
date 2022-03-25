@@ -35,6 +35,7 @@ import os
 from tqdm import tqdm
 from difflib import SequenceMatcher
 import argparse
+from unidecode import unidecode
 
 # Enums to make behavior clearer.
 NO_AUDIO_ACTIVITY = 1 # VAD says this frame has no activity. Move on. ]
@@ -45,7 +46,8 @@ DROP_UTTERANCE = 5
 NEW_UTTERANCE_BAD = 6 # A valid utterance, but not accepted transcript. (unknown speaker, bad text)
 NEW_UTTERANCE_GOOD = 7 # A new utterance. 
 
-def extract_tales_skits(visualization: Optional[bool] = False):
+def extract_tales_skits(visualization: Optional[bool] = False, 
+                        multiprocessing: Optional[bool] = True):
   """
   Principal function extracting utterances by speaker with transcripts
   from Tales of video game skit recordings. 
@@ -70,12 +72,16 @@ def extract_tales_skits(visualization: Optional[bool] = False):
     video_fpath = data_folder + "/" + video_filename
     game_name = _determine_game_title(video_filename)
 
-    video_infos.append((video_id, video_fpath, game_name))
+    if multiprocessing:
+      video_infos.append((video_id, video_fpath, game_name))
+    else:
+      _process_skit_video((video_id, video_fpath, game_name), visualization, False)
   
   # Multiprocessing. 
-  func = partial(_process_skit_video, visualization=visualization)
-  job = Pool(n_processes).imap(func, video_infos)
-  list(tqdm(job, "Videos Processed", len(video_infos), unit = "video"))
+  if len(video_infos) > 0:
+    func = partial(_process_skit_video, visualization=visualization, multiprocessing=True)
+    job = Pool(n_processes).imap(func, video_infos)
+    list(tqdm(job, "Videos Processed", len(video_infos), unit = "video"))
 
 def _determine_game_title(filename):
   """
@@ -87,7 +93,7 @@ def _determine_game_title(filename):
     if game_name in lower_filename:
       return game_name
 
-def _process_skit_video(video_info, visualization):
+def _process_skit_video(video_info, visualization, multiprocessing=False):
   """
   Processes an entire skit video. For each selected frame in the video,
   takes the following steps:
@@ -143,6 +149,7 @@ def _process_skit_video(video_info, visualization):
   activity_segments, activity_segment_middles = _calculate_activity_frames(unbuffered_activity_segments, video_fps)
 
   statistics = {
+    "potential_utterances":len(activity_segments),
     "successful_utterances": 0,
     "total_dropped":0,
     "total_discrepancies": 0,
@@ -168,10 +175,15 @@ def _process_skit_video(video_info, visualization):
     prev_speaker = None
     prev_drop_utterance = False
     prev_start = None
-    cleaner = Cleaner(game_name)
+    cleaner = Cleaner(game_name, multiprocessing)
 
-    #for frame_num in tqdm(range(0, frames_to_process), desc="Video Frames Processed", total=frames_to_process):
-    for frame_num in range(0, frames_to_process):
+    # Do not show tqdm progress bar for multiprocessing. 
+    if multiprocessing is True:
+      enumeration = range(0, frames_to_process)
+    else:
+      enumeration = tqdm(range(0, frames_to_process), desc="Video Frames Processed", total=frames_to_process)
+
+    for frame_num in enumeration:
       if stop_video is False:
         # We read in every single frame to be absolutely sure that we
         # are not missing any frames with audio activity. 
@@ -185,9 +197,10 @@ def _process_skit_video(video_info, visualization):
           if activity_index < len(activity_segment_middles) and current_ms >= activity_segment_middles[activity_index]:
             # Process the frame if we're not skipping it. 
             frame_ret = _process_frame(wav, video_id, frame, frame_num, video_length, 
-                                       activity_segments, activity_index, prev_transcript, 
-                                       prev_speaker, prev_drop_utterance, prev_start, game_name,
-                                       statistics, speaker_blacklist, speaker_indices, cleaner, visualization)
+                                      activity_segments, activity_index, prev_transcript, 
+                                      prev_speaker, prev_drop_utterance, prev_start, game_name,
+                                      statistics, speaker_blacklist, speaker_indices, cleaner, 
+                                      visualization, multiprocessing)
             statistics = frame_ret[0]
             speaker_blacklist = frame_ret[1]
             speaker_indices = frame_ret[2]
@@ -231,7 +244,8 @@ def _process_skit_video(video_info, visualization):
   # Write info to metadata file and exit. 
   f = open(output_folder + "video_" + str(video_id) + "_info.txt", "w")
 
-  f.write("Video id: %d - %s skits from: \"%s\"" % (video_id, game_name, video_fpath))
+  # Unidecode, as some characters are annoying.
+  f.write(unidecode("Video id: %s - %s skits from: \"%s\"\n\n" % (str(video_id), str(game_name), str(video_fpath))))
 
   f.write("Video metadata:\n")
   f.write("  Video Length (frames): %d\n" % video_length)
@@ -251,7 +265,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
                    activity_segments, activity_index, prev_transcript, 
                    prev_speaker, prev_drop_utterance, prev_start, game_name,
                    statistics, speaker_blacklist, speaker_indices, cleaner,
-                   visualization=False):
+                   visualization=False, multiprocessing = False):
   """
   Provided information about the current frame, the current frame
   itself, as well as information regarding the "current" utterance,
@@ -284,7 +298,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
   # If no speaker is found, this is considered a NEW utterance and
   # the previous utterance (if present) to be complete. 
   if speaker_name is None or speaker_name == "":
-    print("[WARNING] Dataset - V-%d - No speaker found!" % video_id)
+    _print_text("[WARNING] Dataset - V-%d - No speaker found!" % video_id, multiprocessing)
     speaker_name = ""
     if visualization: _debug_frame_view(frame, "New (%s): \"%s\"" % (speaker_name, ""), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - NO SPEAKER FOUND!")
     new_utterance = True
@@ -309,7 +323,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
     # a new, bad utterance.
     subtitles = ""
     if drop_current_utterance is False:
-      print("[WARNING] Dataset - V-%d - No transcript found!" % video_id)
+      _print_text("[WARNING] Dataset - V-%d - No transcript found!" % video_id, multiprocessing)
       if visualization: _debug_frame_view(frame, "New (%s): \"%s\"" % (speaker_name, subtitles), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - NO TRANSCRIPT FOUND!")
       statistics["total_no_transcript"] += 1
     new_utterance = True
@@ -331,7 +345,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
       # Don't bother check if we already know this utterrance is corrupted. 
       if variance_from_prev_transcript <= 1.0 - subtitle_variance_acceptable_thresh:
         if prev_drop_utterance is False:
-          print("[WARNING] Dataset - V-%d - Potential discrepancy found! Prev start: %d" % (video_id, prev_start))
+          _print_text("[WARNING] Dataset - V-%d - Potential discrepancy found! Prev start: %d" % (video_id, prev_start), multiprocessing)
           print("                    Prev (%s): \"%s\"" % (prev_speaker, prev_transcript.replace("\n", " ")))
           print("                    Current (%s): \"%s\"" % (speaker_name, subtitles.replace("\n", " ")))
           print("                    Similarity: %.2f" % variance_from_prev_transcript)
@@ -348,7 +362,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
   # a bad utterance. 
   if speaker_name != "" and speaker_name not in speaker_whitelist[game_name]:
     if speaker_name not in speaker_blacklist:
-      print("[INFO] Dataset - V-%d -Encountered non-whitelisted character %s." % (video_id, speaker_name))
+      _print_text("[INFO] Dataset - V-%d -Encountered non-whitelisted character %s." % (video_id, speaker_name), multiprocessing)
       speaker_blacklist.append(speaker_name)
     statistics["total_blacklisted_speaker"] += 1
     drop_current_utterance = True
@@ -396,8 +410,8 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
     # No action needs to be taken for these. 
     statistics["total_dropped"] += 1
     if not (complete_utterance_speaker != "" and complete_utterance_speaker not in speaker_whitelist[game_name]):
-      print("[DEBUG] Dataset - V-%d -Dropped utterance (%s) with range: %d - %d" 
-        % (video_id, complete_utterance_speaker, complete_utterance_start, complete_utterance_end))
+      _print_text("[DEBUG] Dataset - V-%d -Dropped utterance (%s) with range: %d - %d" 
+        % (video_id, complete_utterance_speaker, complete_utterance_start, complete_utterance_end), multiprocessing)
 
 
   # If the speaker name is whitelisted, process the transcript with
@@ -420,6 +434,17 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
     _debug_frame_view(subtitle_roi_preprocessed, text_line_1=text_line_1, text_line_2 = text_line_2, text_line_3 = text_line_3)
 
   return(statistics, speaker_blacklist, speaker_indices, NEW_UTTERANCE_GOOD, drop_current_utterance, start, subtitles, speaker_name)
+
+
+def _print_text(output, multiprocessing):
+  """
+  If we are printing out the progress bar for each step, use a
+  newline before each message.
+  """
+  if multiprocessing:
+    print(output)
+  else:
+    print("\n" + output)
 
 def _debug_frame_view(frame, text_line_1 = None, text_line_2 = None, 
                       text_line_3 = None):
@@ -631,11 +656,16 @@ def _get_frame_speaker_region(frame, game_name):
   roi_frame = frame[y1:y2, x1:x2]
   return roi_frame
 
-# When we run, just head right into generation. 
+# When we run, just head right into generation.
+# 
+# -v = Visualization (default False) 
+# -m = Multiprocessing (default True)
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("-v", default=False, action="store_true")
+  parser.add_argument("-m", default=True, action="store_false")
   args = parser.parse_args()
 
   visualization = args.v
-  extract_tales_skits(visualization)
+  multiprocessing = args.m
+  extract_tales_skits(visualization, multiprocessing)

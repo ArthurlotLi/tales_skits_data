@@ -4,7 +4,7 @@
 # Configurable parameters for dataset generation.
 
 data_folder = "./data"
-output_folder = "./TalesSkits/full"
+output_folder = "./TalesSkitsTest/full"
 output_format = "wav"
 
 # This may seem excessive, but many of the videos are shorter than the
