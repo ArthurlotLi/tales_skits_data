@@ -3,8 +3,8 @@
 #
 # Configurable parameters for dataset generation.
 
-data_folder = "./data_test"
-output_folder = "./TalesSkitsTest/full"
+data_folder = "./data"
+output_folder = "./TalesSkits/full"
 output_format = "wav"
 
 # Ideally this should sync up with how many cores you have. You should
