@@ -77,7 +77,9 @@ class Cleaner:
     processed_text = processed_text.strip()
 
     # Per game behavior. 
-    if self.game_name == "berseria":
+    if self.game_name == "berseria" or self.game_name == "zestiria":
+      # Berseria and Zestiria have font that have "I"s infuriatingly
+      # similar to "1"s.
       processed_text = processed_text.replace("1", "I")
 
     return str(processed_text), drop_current_utterance, cleaner_dropped

@@ -54,8 +54,8 @@ subtitle_roi_by_game = {
     "subtitle_roi_y2": .01, # % total resolution from bottom. 
   },
   "zestiria" : {
-    "subtitle_roi_x1": .08, # % total resolution from left.
-    "subtitle_roi_y1": .817, # % total resolution from top.
+    "subtitle_roi_x1": .19, # % total resolution from left.
+    "subtitle_roi_y1": .78, # % total resolution from top.
     "subtitle_roi_x2": .08, # % total resolution from right.
     "subtitle_roi_y2": .00, # % total resolution from bottom. 
   },
@@ -91,9 +91,9 @@ speaker_roi_by_game = {
     "subtitle_roi_y2": .175, # % total resolution from bottom. 
   },
   "zestiria" : {
-    "subtitle_roi_x1": .08, # % total resolution from left.
+    "subtitle_roi_x1": .01, # % total resolution from left.
     "subtitle_roi_y1": .78, # % total resolution from top.
-    "subtitle_roi_x2": .50, # % total resolution from right.
+    "subtitle_roi_x2": .817, # % total resolution from right.
     "subtitle_roi_y2": .176, # % total resolution from bottom. 
   },
   "xillia 1" : {

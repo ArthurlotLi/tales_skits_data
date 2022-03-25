@@ -41,7 +41,6 @@ speaker_whitelist = {
   ],
   "xillia 2" : [
     "JUDE",
-    "MILLA",
     "ALVIN",
     "ELIZE",
     "ROWEN",

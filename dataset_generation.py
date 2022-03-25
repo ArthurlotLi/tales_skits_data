@@ -233,8 +233,8 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
   # process each region for the stuff we need for OCR.
   subtitle_roi = _get_frame_region_of_interest(frame, game_name)
   speaker_roi = _get_frame_speaker_region(frame, game_name)
-  subtitle_roi_preprocessed = _preprocess_frame(subtitle_roi, game_name)
-  speaker_roi_preprocessed = _preprocess_frame(speaker_roi, game_name)
+  subtitle_roi_preprocessed = _preprocess_frame(subtitle_roi, game_name, True)
+  speaker_roi_preprocessed = _preprocess_frame(speaker_roi, game_name, False)
 
   # Show the entire preprocessed frame if visualizing.
   if visualization: frame = _preprocess_frame(frame, game_name)
@@ -333,7 +333,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
   complete_utterance_start = prev_start
   complete_utterance_end = activity_segments[activity_index-1][1]
   complete_utterance_speaker = prev_speaker
-  if not prev_drop_utterance or drop_current_utterance:
+  if not prev_drop_utterance:
     # Skip the first period of silence.
     if complete_utterance_speaker is not None:
 
@@ -358,9 +358,12 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
 
       statistics["successful_utterances"] += 1
   else:
-    print("\n[DEBUG] Dataset - Dropped utterance (%s) with range: %d - %d" 
-      % (complete_utterance_speaker, complete_utterance_start, complete_utterance_end))
+    # Don't flood the console with reports of dropped blacklist characters. 
+    # No action needs to be taken for these. 
     statistics["total_dropped"] += 1
+    if not (complete_utterance_speaker != "" and complete_utterance_speaker not in speaker_whitelist[game_name]):
+      print("\n[DEBUG] Dataset - Dropped utterance (%s) with range: %d - %d" 
+        % (complete_utterance_speaker, complete_utterance_start, complete_utterance_end))
 
 
   # If the speaker name is whitelisted, process the transcript with
@@ -453,7 +456,7 @@ def _calculate_activity_frames(activity_segments, fps):
   return new_activity_segments, activity_segment_middles
 
 
-def _preprocess_frame(frame,game_name):
+def _preprocess_frame(frame,game_name, subtitles = False):
   """
   Given a frame, prerocess the frame in preparation for OCR.
 
@@ -495,7 +498,22 @@ def _preprocess_frame(frame,game_name):
 
     # Sharpen
     frame = cv2.filter2D(src=frame, ddepth=-1, kernel=kernel)
-  elif game_name == "berseria":
+
+    # Extra preprocessing step - remove the icon in the bottom right
+    # hand side of the scren.
+    if subtitles:
+      frame_shape = frame.shape
+      y_tot = frame_shape[0]
+      x_tot = frame_shape[1]
+
+      x1 = int(0.88 * x_tot)
+      y1 = int(0.55 * y_tot)
+      x2 = x_tot - int(0.08*x_tot)
+      y2 = y_tot - int(0.15*y_tot)
+
+      frame[y1:y2, x1:x2] = (0)
+
+  elif game_name == "berseria" or game_name == "zestiria":
     frame = cv2.resize(frame, None, fx=1.3, fy=1.0, interpolation=cv2.INTER_CUBIC)
     #frame = cv2.resize(frame, None, fx=0.5, fy=0.6, interpolation=cv2.INTER_AREA)
   
@@ -539,6 +557,7 @@ def _get_frame_region_of_interest(frame, game_name):
   y2 = y_tot - int(subtitle_roi_by_game[game_name]["subtitle_roi_y2"] * y_tot)
 
   roi_frame = frame[y1:y2, x1:x2]
+
   return roi_frame
 
 def _get_frame_speaker_region(frame, game_name):
