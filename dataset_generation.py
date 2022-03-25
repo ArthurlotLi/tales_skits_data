@@ -67,10 +67,16 @@ def extract_tales_skits(visualization: Optional[bool] = False,
 
   video_infos = []
   for video_id in range(initial_video_id_index, data_count+initial_video_id_index):   
-    # TODO: Implement multiprocessing and use batches. 
     video_filename = video_files[video_id-initial_video_id_index]
     video_fpath = data_folder + "/" + video_filename
     game_name = _determine_game_title(video_filename)
+
+    # Create wav files synchronously. This avoids an issue where wavs
+    # are not processed correctly and cut off way before the video
+    # finishes. We will double-check the wav file has been created
+    # in the process skit video method. 
+    wav_fpath = video_fpath.replace(video_suffix, audio_suffix)
+    if create_wav_file(video_fpath, wav_fpath) is False: return
 
     if multiprocessing:
       video_infos.append((video_id, video_fpath, game_name))
@@ -116,7 +122,7 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
   video_id = video_info[0]
   video_fpath = video_info[1]
   game_name = video_info[2]
-  print("\n[INFO] Dataset - Processing video id %d for %s skits from file: \"%s\"" % (video_id, game_name, video_fpath))
+  print("\n[INFO] Dataset - V-%d - Processing video id %d for %s skits from file: \"%s\"" % (video_id, video_id, game_name, video_fpath))
   wav_fpath = video_fpath.replace(video_suffix, audio_suffix)
   vad_fpath = video_fpath.replace(video_suffix, vad_suffix)
 
@@ -128,20 +134,33 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
   wav = load_wav(wav_fpath)
 
   # Attempt to load the video. 
-  print("[DEBUG] Dataset - Loading video.")
+  print("[DEBUG] Dataset - V-%d - Loading video." % video_id)
   cap = cv2.VideoCapture(video_fpath)
   if cap.isOpened() is False: 
-    print("[ERROR] Dataset - Error opening video file at %s." % video_fpath)
+    print("[ERROR] Dataset - V-%d - Error opening video file at %s." % (video_id, video_fpath))
     return 
 
   # Get video statistics. We really hope this is correct. If not, then
   # we'll error out.
   video_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
   video_fps = int(cap.get(cv2.CAP_PROP_FPS))
-  print("[INFO] Dataset - Video metadata:")
+  print("[INFO] Dataset - V-%d - Video metadata:" % video_id)
   print("                 Video Length (frames): %d" % video_length)
   print("                 Video FPS: %.4f" % video_fps)
   print("")
+
+  # Sometimes, a glitch can happen where the generated wav is not
+  # properly generated. Detect that case here and restart generation.
+  approx_video_length_ms = video_length * video_fps
+  video_wav_diff = abs(approx_video_length_ms - len(wav))
+  video_wav_diff = video_wav_diff/approx_video_length_ms
+  print("[INFO] Dataset - V-%d - Video aprox length in ms = %d. Audio length = %d. Diff: %.2f" % (video_id, approx_video_length_ms, len(wav), video_wav_diff))
+  if video_wav_diff > 0.30:
+    print("[ERROR] Dataset - V-%d - Wav file is too short! Throwing out vad mask and wav and trying again..." % video_id)
+    os.remove(wav_fpath)
+    os.remove(vad_fpath)
+    _process_skit_video(video_info, visualization, multiprocessing)
+    return
 
   # Generate tuples of segments of voice activity, each at most 
   # containing one utterance from one speaker. 
@@ -300,7 +319,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
   if speaker_name is None or speaker_name == "":
     _print_text("[WARNING] Dataset - V-%d - No speaker found!" % video_id, multiprocessing)
     speaker_name = ""
-    if visualization: _debug_frame_view(frame, "New (%s): \"%s\"" % (speaker_name, ""), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - NO SPEAKER FOUND!")
+    if visualization: _debug_frame_view(speaker_roi_preprocessed, "New (%s): \"%s\"" % (speaker_name, ""), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - NO SPEAKER FOUND!")
     new_utterance = True
     drop_current_utterance = True
     statistics["total_no_speaker"] += 1
@@ -324,7 +343,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
     subtitles = ""
     if drop_current_utterance is False:
       _print_text("[WARNING] Dataset - V-%d - No transcript found!" % video_id, multiprocessing)
-      if visualization: _debug_frame_view(frame, "New (%s): \"%s\"" % (speaker_name, subtitles), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - NO TRANSCRIPT FOUND!")
+      if visualization: _debug_frame_view(subtitle_roi_preprocessed, "New (%s): \"%s\"" % (speaker_name, subtitles), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - NO TRANSCRIPT FOUND!")
       statistics["total_no_transcript"] += 1
     new_utterance = True
     drop_current_utterance = True
@@ -349,7 +368,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
           print("                    Prev (%s): \"%s\"" % (prev_speaker, prev_transcript.replace("\n", " ")))
           print("                    Current (%s): \"%s\"" % (speaker_name, subtitles.replace("\n", " ")))
           print("                    Similarity: %.2f" % variance_from_prev_transcript)
-          if visualization: _debug_frame_view(frame, "New (%s): \"%s\"" % (speaker_name, subtitles), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - %.2f MATCH!" % variance_from_prev_transcript)
+          #if visualization: _debug_frame_view(subtitle_roi_preprocessed, "New (%s): \"%s\"" % (speaker_name, subtitles), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - %.2f MATCH!" % variance_from_prev_transcript)
           statistics["total_discrepancies"] += 1
 
         # We don't consider this to be a new utterance if this is the case. 
@@ -364,6 +383,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
     if speaker_name not in speaker_blacklist:
       _print_text("[INFO] Dataset - V-%d -Encountered non-whitelisted character %s." % (video_id, speaker_name), multiprocessing)
       speaker_blacklist.append(speaker_name)
+      if visualization: _debug_frame_view(speaker_roi_preprocessed, "New (%s): \"%s\"" % (speaker_name, ""), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "UNKNOWN SPEAKER FOUND.")
     statistics["total_blacklisted_speaker"] += 1
     drop_current_utterance = True
 
@@ -431,7 +451,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
       text_line_2 = "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript)
       info_tuple = (str(prev_drop_utterance), prev_start, activity_segments[activity_index-1][1], activity_index,start, end, middle, frame_num)
       text_line_3 = "Prev Drop: %s | Prev Start: %d | Prev End: %d | AI: %d | Start: %d | End: %d | Middle: %d | Frame: %d" % info_tuple
-    _debug_frame_view(subtitle_roi_preprocessed, text_line_1=text_line_1, text_line_2 = text_line_2, text_line_3 = text_line_3)
+    _debug_frame_view(frame, text_line_1=text_line_1, text_line_2 = text_line_2, text_line_3 = text_line_3)
 
   return(statistics, speaker_blacklist, speaker_indices, NEW_UTTERANCE_GOOD, drop_current_utterance, start, subtitles, speaker_name)
 
@@ -532,15 +552,15 @@ def _preprocess_frame(frame,game_name, subtitles = False):
 
     return cv2.LUT(image, table)
 
-  # Convert the frames from BGR to Greyscale. 
-  frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
 
   kernel = np.array([[0, -1, 0],
                      [-1, 5,-1],
                      [0, -1, 0]])
 
   if game_name == "xillia 1" or game_name == "xillia 2":
+    # Convert the frames from BGR to Greyscale. 
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
     # Resize image to make it thin. This is surprisingly effective at
     # reducing variability. 
     frame = cv2.resize(frame, None, fx=1.0, fy=1.6, interpolation=cv2.INTER_CUBIC)
@@ -573,21 +593,27 @@ def _preprocess_frame(frame,game_name, subtitles = False):
       frame[y1:y2, x1:x2] = (0)
 
   elif game_name == "berseria" or game_name == "zestiria":
-    frame = cv2.resize(frame, None, fx=1.3, fy=1.0, interpolation=cv2.INTER_CUBIC)
-    #frame = cv2.resize(frame, None, fx=0.5, fy=0.6, interpolation=cv2.INTER_AREA)
+    # Convert the frames from BGR to RGB (better contrast for this font). 
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    #frame = cv2.resize(frame, None, fx=1.3, fy=1.0, interpolation=cv2.INTER_CUBIC)
+    frame = cv2.resize(frame, None, fx=0.6, fy=1.0, interpolation=cv2.INTER_AREA)
   
     # Apply contrast to the image so we can really REALLY read stuff.
-    frame = cv2.convertScaleAbs(frame, alpha=1.3, beta=0)
+    frame = cv2.convertScaleAbs(frame, alpha=1.0, beta=0)
 
     # Blur
-    frame = cv2.blur(frame,(2,2))
+    #frame = cv2.blur(frame,(2,2))
 
     # Gamma Correction
-    frame = adjust_gamma(frame, gamma=1.2)
+    frame = adjust_gamma(frame, gamma=0.8)
 
     # Sharpen
     #frame = cv2.filter2D(src=frame, ddepth=-1, kernel=kernel)
   elif game_name == "vesperia":
+    # Convert the frames from BGR to Greyscale. 
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
     # Resize image to make it thin. This is surprisingly effective at
     # reducing variability. 
     frame = cv2.resize(frame, None, fx=1.0, fy=1.6, interpolation=cv2.INTER_CUBIC)
@@ -608,12 +634,6 @@ def _preprocess_frame(frame,game_name, subtitles = False):
   else:
     print("[ERROR] Dataset - preprocess_frame received an unknown game name! %s" % game_name)
     assert(False)
-
-  # Blur
-  #frame = cv2.blur(frame,(3,3))
-
-  # Sharpen
-  #frame = cv2.filter2D(src=frame, ddepth=-1, kernel=kernel)
 
   return frame
 

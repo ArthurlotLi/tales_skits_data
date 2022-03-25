@@ -3,13 +3,13 @@
 #
 # Configurable parameters for dataset generation.
 
-data_folder = "./data"
+data_folder = "./data_test"
 output_folder = "./TalesSkitsTest/full"
 output_format = "wav"
 
-# This may seem excessive, but many of the videos are shorter than the
-# others and
-n_processes = 20
+# Ideally this should sync up with how many cores you have. You should
+# never have 100% CPU usage for maximum efficiency.
+n_processes = 10
 
 # Used in trim_long_silences - largest number in int16.
 int16_max = (2 ** 15) - 1
