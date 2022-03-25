@@ -200,56 +200,57 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
       enumeration = range(0, frames_to_process)
     else:
       enumeration = tqdm(range(0, frames_to_process), desc="Video Frames Processed", total=frames_to_process)
-
-    for frame_num in enumeration:
-      if stop_video is False:
-        # We read in every single frame to be absolutely sure that we
-        # are not missing any frames with audio activity. 
-        # Read the next frame of the video. 
-        ret, frame = cap.read() 
-
-        if ret:
-          # Get current ms since start. If we're >= a middle frame for
-          # our next segment, process this frame. 
-          current_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
-          if activity_index < len(activity_segment_middles) and current_ms >= activity_segment_middles[activity_index]:
-            # Process the frame if we're not skipping it. 
-            frame_ret = _process_frame(wav, video_id, frame, frame_num, video_length, 
-                                      activity_segments, activity_index, prev_transcript, 
-                                      prev_speaker, prev_drop_utterance, prev_start, game_name,
-                                      statistics, speaker_blacklist, speaker_indices, cleaner, 
-                                      visualization, multiprocessing)
-            statistics = frame_ret[0]
-            speaker_blacklist = frame_ret[1]
-            speaker_indices = frame_ret[2]
-            last_frame_status = frame_ret[3]
-            prev_drop_utterance = frame_ret[4]
-            prev_start = frame_ret[5]
-
-            # Depending on the ret, change behavior. 
-            if last_frame_status == NEW_UTTERANCE_BAD or last_frame_status == NEW_UTTERANCE_GOOD:
-              # If we successfully read the transcript of a new utterance,
-              # good or bad, save the information.
-              prev_transcript = frame_ret[6]
-              prev_speaker = frame_ret[7]
-            
-            # The next activity frame to look for. 
-            activity_index += 1
-              
-        else:
-          # End of video reached. End the loop. 
-          stop_video_frame = frame_num
-          stop_video = True
-          break
     
-    # This should hopefully never happen... If it does, the metadata
-    # was incorrect and likely the vad mask was incorrect. Die here. 
-    assert stop_video is True
-    print("[DEBUG] Dataset - End of video reached. End frame count: %d" % stop_video_frame)
-  
-  # We've finished processing the video. cleanup.
-  cap.release()
-  cv2.destroyAllWindows()
+    while False:
+      for frame_num in enumeration:
+        if stop_video is False:
+          # We read in every single frame to be absolutely sure that we
+          # are not missing any frames with audio activity. 
+          # Read the next frame of the video. 
+          ret, frame = cap.read() 
+
+          if ret:
+            # Get current ms since start. If we're >= a middle frame for
+            # our next segment, process this frame. 
+            current_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
+            if activity_index < len(activity_segment_middles) and current_ms >= activity_segment_middles[activity_index]:
+              # Process the frame if we're not skipping it. 
+              frame_ret = _process_frame(wav, video_id, frame, frame_num, video_length, 
+                                        activity_segments, activity_index, prev_transcript, 
+                                        prev_speaker, prev_drop_utterance, prev_start, game_name,
+                                        statistics, speaker_blacklist, speaker_indices, cleaner, 
+                                        visualization, multiprocessing)
+              statistics = frame_ret[0]
+              speaker_blacklist = frame_ret[1]
+              speaker_indices = frame_ret[2]
+              last_frame_status = frame_ret[3]
+              prev_drop_utterance = frame_ret[4]
+              prev_start = frame_ret[5]
+
+              # Depending on the ret, change behavior. 
+              if last_frame_status == NEW_UTTERANCE_BAD or last_frame_status == NEW_UTTERANCE_GOOD:
+                # If we successfully read the transcript of a new utterance,
+                # good or bad, save the information.
+                prev_transcript = frame_ret[6]
+                prev_speaker = frame_ret[7]
+              
+              # The next activity frame to look for. 
+              activity_index += 1
+                
+          else:
+            # End of video reached. End the loop. 
+            stop_video_frame = frame_num
+            stop_video = True
+            break
+      
+      # This should hopefully never happen... If it does, the metadata
+      # was incorrect and likely the vad mask was incorrect. Die here. 
+      assert stop_video is True
+      print("[DEBUG] Dataset - End of video reached. End frame count: %d" % stop_video_frame)
+    
+    # We've finished processing the video. cleanup.
+    cap.release()
+    cv2.destroyAllWindows()
 
   # Execute speaker verification if enabled, going through each folder
   # we possibly generated and verifying all the contents. For files
@@ -259,7 +260,7 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
     for speaker in speaker_whitelist[game_name]:
       speaker_folder = output_folder + "/" + speaker + "/" + str(video_id)
       if os.path.exists(speaker_folder):
-        unclean = verify_directory(speaker_folder)
+        unclean = verify_directory(speaker_folder, video_id)
         statistics["speaker_verification_failed"] += unclean
         statistics["total_dropped"] += unclean
         statistics["successful_utterances"] -= unclean

@@ -13,6 +13,7 @@
 
 from params_data import *
 
+from pathlib import Path
 import os
 import sys
 
@@ -26,13 +27,13 @@ def verify_directory(wavs_fpath, video_id):
 
   Returns number of files deemed unclean. 
   """
-  reported_files = verify_singular_directory(wavs_fpath, speaker_encoder_fpath, 
+  if not os.path.exists(unclean_folder): os.makedirs(unclean_folder, exist_ok=True)
+  reported_files = verify_singular_directory(wavs_fpath, Path(speaker_encoder_fpath), 
                                               speaker_verification_l2_tolerance)
   f = open(unclean_folder + "/" + "verification_results.txt", "a")
   for combined_norms, filename in reported_files:
     old_path = wavs_fpath + "/" + filename
     new_path = unclean_folder + "/" + filename
-    if not os.path.exists(unclean_folder): os.makedirs(unclean_folder, exist_ok=True)
     os.replace(old_path, new_path)
     f.write("%.2f - %s\n" % (combined_norms, filename))
   f.close()
