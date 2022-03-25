@@ -21,7 +21,7 @@
 # Ensure that audio configuration hyperparameters match those of the
 # project that you want to apply this dataset to. 
 
-from params_data import *
+from data_params import *
 from audio_utils import *
 from frame_utils import *
 from frame_processing import *
@@ -268,6 +268,7 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
                 del speaker_transcripts[i]
                 removed_transcripts += 1
                 removed = True
+                break
             if removed is True: break
 
         assert(removed_transcripts == len(unclean_files))
@@ -280,14 +281,15 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
     transcript_file_contents = ""
     for wav_filename, transcript in speaker_transcripts: 
       new_line = "%s %s\n" % (wav_filename, transcript)
-      transcript_file_contents.append(new_line)
+      transcript_file_contents += new_line
     
-    transcript_file_name = speaker+"-"+video_id+".trans.txt"
+    transcript_file_name = speaker_name+"-"+str(video_id)+".trans.txt"
     f = open(transcript_path + "/" + transcript_file_name, "w")
     f.write(transcript_file_contents)
     print("[INFO] Dataset - V-%d - Wrote %d utterances to transcript file %s." % (video_id, len(speaker_transcripts), transcript_file_name))
 
 
+  # Print out statistics for user.
   print("[INFO] Dataset - V-%d -Video processing complete. Statistics:" % video_id)
   for key in statistics:
     print("                 %s: %d" % (key, statistics[key]))
@@ -296,7 +298,7 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
   print(speaker_blacklist)
   print("")
 
-  # Write info to metadata file and exit. 
+  # Write the same statistics to metadata file. 
   f = open(output_folder + "/" + "video_" + str(video_id) + "_info.txt", "w")
 
   # Unidecode, as some characters are annoying.
@@ -316,6 +318,8 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
   for speaker in speaker_blacklist:
     f.write("  %s\n" % speaker)
   f.close()
+
+  # All done with this video.
 
 # When we run, just head right into generation.
 # 

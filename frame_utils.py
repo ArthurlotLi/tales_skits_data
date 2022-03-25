@@ -3,7 +3,7 @@
 #
 # Visual preprocessing functions to aid OCR.
 
-from params_data import *
+from data_params import *
 
 import cv2
 import numpy as np

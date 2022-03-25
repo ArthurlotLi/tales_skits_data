@@ -11,7 +11,7 @@
 # that the dependencies for multispeaker synthesis have been installed
 # (pytorch, etc).
 
-from params_data import *
+from data_params import *
 
 from pathlib import Path
 import os

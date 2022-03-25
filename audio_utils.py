@@ -4,7 +4,7 @@
 # Utilities to support dataset generation related to processing the
 # audio of video files. 
 
-from params_data import *
+from data_params import *
 
 import subprocess
 import numpy as np

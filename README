@@ -18,6 +18,15 @@ project in order to detect obviously "unclean" utterances by comparing
 all samples in a directory to each other and flagging utterances with a 
 diff vector that has a greater l2 norm than the specified tolerance. 
 
+This is necessary as there are inherently undetectable discrepancies 
+when correlating speakers to utterances - such as speaker utterances
+purposefully stepping on each other, multiple speakers speaking at 
+the same time under a single name, or even speakers posing as other
+speakers. (Teepo ventriloquism, for example) 
+
+Data generation variables such as sampling rate, error tolerances, etc.
+are highly configurable, found in data_params.py.
+
 ------------------------------------------------------------------------------
 Usage:
 ------------------------------------------------------------------------------
@@ -42,7 +51,20 @@ To generate a dataset, make sure to do the following:
 
    https://tesseract-ocr.github.io/tessdoc/Home.html
 
-3. Gather .mp4 files and place in a subfolder called "data" in the repo.
+4. Ensure that multispeaker_synthesis is present in the parent directory
+   one level up from this one. If you don't want to use speaker
+   verification as post processing (it's highly recommended), disable 
+   the feature in data_params. 
 
-4. Run dataset_generation.py. Output data will be placed in a folder
+   You can also change other speaker verification parameters there, like
+   which model iteration to use (it's location), and what the acceptable
+   threshold for l2 normed difference is. 
+
+5. Gather .mp4 files and place in a subfolder called "data" in the repo.
+
+6. Run dataset_generation.py. Output data will be placed in a folder
    titled "TalesSkits".
+
+7. Optionally, run test_train_split.py to split data accordingly. Note
+   that the split occurs by utterances, not by speakers, so the same 
+   speakers will appear in test and train.

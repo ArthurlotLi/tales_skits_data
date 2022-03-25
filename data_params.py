@@ -1,9 +1,9 @@
 #
-# params_data.py
+# data_params.py
 #
 # Configurable parameters for dataset generation.
 
-data_folder = "./data_test"
+data_folder = "./data"
 output_folder = "./TalesSkits/full"
 output_format = "wav"
 

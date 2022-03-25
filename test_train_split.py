@@ -12,7 +12,7 @@
 # Assumes data is in the present in the directory specified in params
 # data. 
 
-from params_data import *
+from data_params import *
 
 import os
 import numpy as np

@@ -7,7 +7,7 @@
 # frame's utterance. 
 
 from frame_utils import *
-from params_data import *
+from data_params import *
 from audio_utils import *
 from speaker_whitelist import speaker_whitelist
 
