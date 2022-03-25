@@ -23,6 +23,9 @@ speaker_whitelist = {
     "KUROGANE",
     "BENWICK",
     "TERESA",
+    "MEDISSA",
+    "ARTORIUS",
+    "SERES",
   ],
   "zestiria" : [
     "SOREY",
@@ -44,6 +47,7 @@ speaker_whitelist = {
     "MUZET",
     "GAIUS",
     "TEEPO",
+    "DRISELLE",
   ],
   "xillia 2" : [
     "JUDE",
@@ -54,7 +58,6 @@ speaker_whitelist = {
     "MUZET",
     "GAIUS",
     "TEEPO",
-    "LUDGER",
     "ELLE",
   ],
   "vesperia" : [
@@ -65,5 +68,6 @@ speaker_whitelist = {
     "JUDITH",
     "RITA",
     "PATTY",
+    "FLYNN",
   ],
 }

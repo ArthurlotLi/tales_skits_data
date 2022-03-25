@@ -147,6 +147,7 @@ def _process_skit_video(video_info, visualization):
     "total_dropped":0,
     "total_discrepancies": 0,
     "total_no_speaker": 0,
+    "total_blacklisted_speaker": 0,
     "total_no_transcript":0,
     "total_cleaner": 0,
   }
@@ -227,12 +228,21 @@ def _process_skit_video(video_info, visualization):
   print(speaker_blacklist)
   print("")
 
-  # Write info to file and exit. 
+  # Write info to metadata file and exit. 
   f = open(output_folder + "video_" + str(video_id) + "_info.txt", "w")
+
+  f.write("Video id: %d - %s skits from: \"%s\"" % (video_id, game_name, video_fpath))
+
+  f.write("Video metadata:\n")
+  f.write("  Video Length (frames): %d\n" % video_length)
+  f.write("  Video FPS: %.4f\n" % video_fps)
+  f.write("\n")
+
   f.write("Statistics:\n")
   for key in statistics:
     f.write("  %s: %d\n" % (key, statistics[key]))
   f.write("\n")
+
   f.write("Blacklisted Speakers:\n")
   for speaker in speaker_blacklist:
     f.write("  %s\n" % speaker)
@@ -274,7 +284,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
   # If no speaker is found, this is considered a NEW utterance and
   # the previous utterance (if present) to be complete. 
   if speaker_name is None or speaker_name == "":
-    print("\n[WARNING] Dataset - No speaker found!")
+    print("[WARNING] Dataset - V-%d - No speaker found!" % video_id)
     speaker_name = ""
     if visualization: _debug_frame_view(frame, "New (%s): \"%s\"" % (speaker_name, ""), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - NO SPEAKER FOUND!")
     new_utterance = True
@@ -299,7 +309,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
     # a new, bad utterance.
     subtitles = ""
     if drop_current_utterance is False:
-      print("\n[WARNING] Dataset - No transcript found!")
+      print("[WARNING] Dataset - V-%d - No transcript found!" % video_id)
       if visualization: _debug_frame_view(frame, "New (%s): \"%s\"" % (speaker_name, subtitles), "Prev (%s): \"%s\"" % (prev_speaker, prev_transcript), "WARNING - NO TRANSCRIPT FOUND!")
       statistics["total_no_transcript"] += 1
     new_utterance = True
@@ -321,7 +331,7 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
       # Don't bother check if we already know this utterrance is corrupted. 
       if variance_from_prev_transcript <= 1.0 - subtitle_variance_acceptable_thresh:
         if prev_drop_utterance is False:
-          print("\n[WARNING] Dataset - Potential discrepancy found! Prev start: %d" % prev_start)
+          print("[WARNING] Dataset - V-%d - Potential discrepancy found! Prev start: %d" % (video_id, prev_start))
           print("                    Prev (%s): \"%s\"" % (prev_speaker, prev_transcript.replace("\n", " ")))
           print("                    Current (%s): \"%s\"" % (speaker_name, subtitles.replace("\n", " ")))
           print("                    Similarity: %.2f" % variance_from_prev_transcript)
@@ -338,8 +348,9 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
   # a bad utterance. 
   if speaker_name != "" and speaker_name not in speaker_whitelist[game_name]:
     if speaker_name not in speaker_blacklist:
-      print("\n[INFO] Dataset - Encountered non-whitelisted character %s." % speaker_name)
+      print("[INFO] Dataset - V-%d -Encountered non-whitelisted character %s." % (video_id, speaker_name))
       speaker_blacklist.append(speaker_name)
+    statistics["total_blacklisted_speaker"] += 1
     drop_current_utterance = True
 
   if new_utterance is False:
@@ -385,8 +396,8 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
     # No action needs to be taken for these. 
     statistics["total_dropped"] += 1
     if not (complete_utterance_speaker != "" and complete_utterance_speaker not in speaker_whitelist[game_name]):
-      print("\n[DEBUG] Dataset - Dropped utterance (%s) with range: %d - %d" 
-        % (complete_utterance_speaker, complete_utterance_start, complete_utterance_end))
+      print("[DEBUG] Dataset - V-%d -Dropped utterance (%s) with range: %d - %d" 
+        % (video_id, complete_utterance_speaker, complete_utterance_start, complete_utterance_end))
 
 
   # If the speaker name is whitelisted, process the transcript with

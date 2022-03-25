@@ -7,7 +7,9 @@ data_folder = "./data"
 output_folder = "./TalesSkits/full"
 output_format = "wav"
 
-n_processes = 10
+# This may seem excessive, but many of the videos are shorter than the
+# others and
+n_processes = 20
 
 # Used in trim_long_silences - largest number in int16.
 int16_max = (2 ** 15) - 1
