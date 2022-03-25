@@ -23,6 +23,9 @@ _symbols_re = re.compile(r"[^\w|\s|'|.|,|!|?]")
 class Cleaner: 
   _last_message = ""
 
+  def __init__(self, game_name):
+    self.game_name = game_name
+
   def preprocess_text(self, original_text, drop_current_utterance):
     """
     Given original text from the OCR parsed frame, use a harmonized
@@ -72,6 +75,10 @@ class Cleaner:
     processed_text = self._collapse_whitespace(processed_text)
     processed_text = self._uppercase(processed_text)
     processed_text = processed_text.strip()
+
+    # Per game behavior. 
+    if self.game_name == "berseria":
+      processed_text = processed_text.replace("1", "I")
 
     return str(processed_text), drop_current_utterance, cleaner_dropped
 

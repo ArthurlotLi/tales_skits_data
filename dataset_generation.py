@@ -32,6 +32,7 @@ import cv2
 import os
 from tqdm import tqdm
 from difflib import SequenceMatcher
+import argparse
 
 # Enums to make behavior clearer.
 NO_AUDIO_ACTIVITY = 1 # VAD says this frame has no activity. Move on. ]
@@ -154,7 +155,7 @@ def _process_skit_video(video_id, video_fpath, game_name, visualization):
     prev_speaker = None
     prev_drop_utterance = False
     prev_start = None
-    cleaner = Cleaner()
+    cleaner = Cleaner(game_name)
 
     for frame_num in tqdm(range(0, frames_to_process), desc="Video Frames Processed", total=frames_to_process):
       if stop_video is False:
@@ -232,11 +233,11 @@ def _process_frame(wav, video_id, frame, frame_num, video_length,
   # process each region for the stuff we need for OCR.
   subtitle_roi = _get_frame_region_of_interest(frame, game_name)
   speaker_roi = _get_frame_speaker_region(frame, game_name)
-  subtitle_roi_preprocessed = _preprocess_frame(subtitle_roi)
-  speaker_roi_preprocessed = _preprocess_frame(speaker_roi)
+  subtitle_roi_preprocessed = _preprocess_frame(subtitle_roi, game_name)
+  speaker_roi_preprocessed = _preprocess_frame(speaker_roi, game_name)
 
   # Show the entire preprocessed frame if visualizing.
-  if visualization: frame = _preprocess_frame(frame)
+  if visualization: frame = _preprocess_frame(frame, game_name)
 
   new_utterance = None
   drop_current_utterance = False
@@ -392,6 +393,7 @@ def _debug_frame_view(frame, text_line_1 = None, text_line_2 = None,
 
   Press "q" to advance. 
   """
+  frame = frame.copy()
   if text_line_1 is not None:
     cv2.putText(frame, text_line_1, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1, cv2.LINE_AA)
   if text_line_2 is not None:
@@ -451,7 +453,7 @@ def _calculate_activity_frames(activity_segments, fps):
   return new_activity_segments, activity_segment_middles
 
 
-def _preprocess_frame(frame):
+def _preprocess_frame(frame,game_name):
   """
   Given a frame, prerocess the frame in preparation for OCR.
 
@@ -471,31 +473,46 @@ def _preprocess_frame(frame):
   # Convert the frames from BGR to Greyscale. 
   frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-  alpha = 2.7 # Contrast control (1.0-3.0)
-  beta = 0 # Brightness control (0-100)
+
   kernel = np.array([[0, -1, 0],
                      [-1, 5,-1],
                      [0, -1, 0]])
-  resize_x = 2
-  resize_y = 2
-  gamma = 0.1
 
-  # Resize image to make it thin. This is surprisingly effective at
-  # reducing variability. 
-  frame = cv2.resize(frame, None, fx=1.0, fy=1.6, interpolation=cv2.INTER_CUBIC)
-  #frame = cv2.resize(frame, None, fx=0.7, fy=0.7, interpolation=cv2.INTER_AREA)
- 
-  # Apply contrast to the image so we can really REALLY read stuff.
-  frame = cv2.convertScaleAbs(frame, alpha=alpha, beta=beta)
+  if game_name == "xillia 1" or game_name == "xillia 2":
+    # Resize image to make it thin. This is surprisingly effective at
+    # reducing variability. 
+    frame = cv2.resize(frame, None, fx=1.0, fy=1.6, interpolation=cv2.INTER_CUBIC)
+    #frame = cv2.resize(frame, None, fx=0.7, fy=0.7, interpolation=cv2.INTER_AREA)
+  
+    # Apply contrast to the image so we can really REALLY read stuff.
+    frame = cv2.convertScaleAbs(frame, alpha=2.7, beta=0)
 
-  # Blur
-  #frame = cv2.blur(frame,(2,2))
+    # Blur
+    #frame = cv2.blur(frame,(2,2))
 
-  # Gamma Correction
-  frame = adjust_gamma(frame, gamma=gamma)
+    # Gamma Correction
+    frame = adjust_gamma(frame, gamma=0.1)
 
-  # Sharpen
-  frame = cv2.filter2D(src=frame, ddepth=-1, kernel=kernel)
+    # Sharpen
+    frame = cv2.filter2D(src=frame, ddepth=-1, kernel=kernel)
+  elif game_name == "berseria":
+    frame = cv2.resize(frame, None, fx=1.3, fy=1.0, interpolation=cv2.INTER_CUBIC)
+    #frame = cv2.resize(frame, None, fx=0.5, fy=0.6, interpolation=cv2.INTER_AREA)
+  
+    # Apply contrast to the image so we can really REALLY read stuff.
+    frame = cv2.convertScaleAbs(frame, alpha=1.3, beta=0)
+
+    # Blur
+    frame = cv2.blur(frame,(2,2))
+
+    # Gamma Correction
+    frame = adjust_gamma(frame, gamma=1.2)
+
+    # Sharpen
+    #frame = cv2.filter2D(src=frame, ddepth=-1, kernel=kernel)
+  else:
+    print("[ERROR] Dataset - preprocess_frame received an unknown game name! %s" % game_name)
+    assert(False)
 
   # Blur
   #frame = cv2.blur(frame,(3,3))
@@ -545,5 +562,9 @@ def _get_frame_speaker_region(frame, game_name):
 
 # When we run, just head right into generation. 
 if __name__ == "__main__":
-  visualization = False
+  parser = argparse.ArgumentParser()
+  parser.add_argument("-v", default=False, action="store_true")
+  args = parser.parse_args()
+
+  visualization = args.v
   extract_tales_skits(visualization)
