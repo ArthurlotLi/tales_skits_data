@@ -3,9 +3,18 @@
 #
 # Configurable parameters for dataset generation.
 
-data_folder = "./data"
+data_folder = "./data_test"
 output_folder = "./TalesSkits/full"
 output_format = "wav"
+
+# Speaker verification to eliminate otherwise undetectable unclean
+# utterances (like multiple speakers speaking at the same time while
+# under a single name).
+speaker_verification_enabled = True
+multispeaker_synthesis_fpath = "../multispeaker_synthesis"
+speaker_encoder_fpath = multispeaker_synthesis_fpath + "/production_models/speaker_encoder/model1/encoder.pt"
+unclean_folder = "./TalesSkits/mislabeled"
+speaker_verification_l2_tolerance = 1.14
 
 # Ideally this should sync up with how many cores you have. You should
 # never have 100% CPU usage for maximum efficiency.
@@ -42,7 +51,7 @@ min_length_of_non_silence = 0 # Should avoid artifacts. NOTE: Disabled. Better s
 # previous OCR prediction matches the current, the current will 
 # be assumed to be different. Above this threshold, a warning
 # will be issued to the user.
-subtitle_variance_thresh = 0.55
+subtitle_variance_thresh = 0.60
 subtitle_variance_acceptable_thresh = 0.00001 # Acceptable deviation.
 
 # Region of interest for videos. Where the subtitles + name

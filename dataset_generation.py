@@ -26,6 +26,11 @@ from audio_utils import *
 from text_cleaner import *
 from speaker_whitelist import speaker_whitelist
 
+# If enabled, will try to include multispeaker_synthesis code for
+# speaker verification as a post-processing step. 
+if speaker_verification_enabled is True:
+  from speaker_verification import *
+
 from multiprocessing import Pool
 from functools import partial
 from typing import Optional
@@ -169,6 +174,7 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
     "total_blacklisted_speaker": 0,
     "total_no_transcript":0,
     "total_cleaner": 0,
+    "speaker_verification_failed":0,
   }
   speaker_blacklist = []
   speaker_indices = {}
@@ -245,6 +251,19 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
   cap.release()
   cv2.destroyAllWindows()
 
+  # Execute speaker verification if enabled, going through each folder
+  # we possibly generated and verifying all the contents. For files
+  # that do not pass speaker verification, we move them to the unclean
+  # folder. 
+  if speaker_verification_enabled:
+    for speaker in speaker_whitelist[game_name]:
+      speaker_folder = output_folder + "/" + speaker + "/" + str(video_id)
+      if os.path.exists(speaker_folder):
+        unclean = verify_directory(speaker_folder)
+        statistics["speaker_verification_failed"] += unclean
+        statistics["total_dropped"] += unclean
+        statistics["successful_utterances"] -= unclean
+
   print("[INFO] Dataset - Video processing complete. Statistics:")
   for key in statistics:
     print("                 %s: %d" % (key, statistics[key]))
@@ -272,6 +291,7 @@ def _process_skit_video(video_info, visualization, multiprocessing=False):
   f.write("Blacklisted Speakers:\n")
   for speaker in speaker_blacklist:
     f.write("  %s\n" % speaker)
+  f.close()
 
 def _process_frame(wav, video_id, frame, frame_num, video_length, 
                    activity_segments, activity_index, prev_transcript, 

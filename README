@@ -13,6 +13,11 @@ Recognition of on-screen texts during ingame "skits".
 Data is preprocessed in a manner that makes it a suitable companion 
 for the LibriSpeech dataset.
 
+Integrates the speaker encoder model from the multispeaker_synthesis 
+project in order to detect obviously "unclean" utterances by comparing
+all samples in a directory to each other and flagging utterances with a 
+diff vector that has a greater l2 norm than the specified tolerance. 
+
 ------------------------------------------------------------------------------
 Usage:
 ------------------------------------------------------------------------------

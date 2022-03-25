@@ -49,7 +49,7 @@ class Cleaner:
 
     if drop_current_utterance is False and "*" in original_text:
       message_to_print = "[WARNING] Text Cleaner - Submitted text contains \"*\" symbol. Marking as invalid.\n"
-      message_to_print += "                         Text: \"%s\"" % original_text.replace("\n", "")
+      message_to_print += "                         Text: \"%s\"" % original_text.replace("\n", " ")
       if not self.multiprocessing: message_to_print = "\n" + message_to_print
       if message_to_print != self._last_message:
         print(message_to_print)
@@ -59,7 +59,7 @@ class Cleaner:
     
     if drop_current_utterance is False and re.search(_stutter_re,original_text) is not None:
       message_to_print = "[WARNING] Text Cleaner - Submitted text contains \"[A-Z]-[A-Z]\" (stutter). Marking as invalid.\n"
-      message_to_print += "                         Text: \"%s\"" % original_text.replace("\n", "")
+      message_to_print += "                         Text: \"%s\"" % original_text.replace("\n", " ")
       if not self.multiprocessing: message_to_print = "\n" + message_to_print
       if message_to_print != self._last_message:
         print(message_to_print)
