@@ -75,6 +75,10 @@ class Cleaner:
     processed_text = re.sub(_symbols_re, "", processed_text)
     processed_text = processed_text.replace("_","")
     processed_text = self._replace_up_to_x_repeated(".", 10, processed_text)
+
+    # Remove ALL punctuation. This matches what LibriSpeech does. 
+    processed_text = processed_text.replace(".", "")
+
     processed_text = self._collapse_whitespace(processed_text)
     processed_text = self._uppercase(processed_text)
     processed_text = processed_text.strip()

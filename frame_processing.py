@@ -175,7 +175,7 @@ def process_frame(wav, video_id, frame, frame_num, video_length,
       if complete_utterance_speaker not in transcripts:
         transcripts[complete_utterance_speaker] = ([], new_wav_fpath)
       
-      transcript_tuple = (wav_filename, complete_utterance_transcript)
+      transcript_tuple = (wav_filename.replace("."+output_format, ""), complete_utterance_transcript)
       transcripts[complete_utterance_speaker][0].append(transcript_tuple)
 
       statistics["successful_utterances"] += 1

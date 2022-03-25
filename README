@@ -21,8 +21,9 @@ diff vector that has a greater l2 norm than the specified tolerance.
 This is necessary as there are inherently undetectable discrepancies 
 when correlating speakers to utterances - such as speaker utterances
 purposefully stepping on each other, multiple speakers speaking at 
-the same time under a single name, or even speakers posing as other
-speakers. (Teepo ventriloquism, for example) 
+the same time under a single name, small uncharacteristic utterances,
+or even speakers posing as other speakers. 
+(Teepo ventriloquism, for example) 
 
 Data generation variables such as sampling rate, error tolerances, etc.
 are highly configurable, found in data_params.py.
