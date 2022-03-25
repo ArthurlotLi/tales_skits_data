@@ -3,3 +3,5 @@ data_test
 PS3
 TalesSkits
 TalesSkitsTest
+
+__pycache__
