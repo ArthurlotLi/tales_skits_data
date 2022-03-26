@@ -22,6 +22,7 @@ import os
 import numpy as np
 import shutil
 
+min_test_utterances = 10
 train_percentage = 0.90
 train_location = "./TalesSkits/train"
 test_location = "./TalesSkits/test"
@@ -87,6 +88,14 @@ def execute_split():
         trans_test_content = ""
 
         train, test = np.split(wav_files, [int(len(wav_files)*train_percentage)])
+
+        # If there aren't enough stuff in test, empty all test items and
+        # just put the entire folder in train. 
+        if len(test) < min_test_utterances:
+          for item in test:
+            train = np.append(train, item)
+          test = []
+        
         old_train = train.copy()
         old_test = test.copy()
 
