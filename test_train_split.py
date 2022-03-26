@@ -101,32 +101,33 @@ def execute_split():
           trans_test_content += trans_orig_dict[file] + "\n"
           new_test.append(file.replace(output_folder, test_location))
 
-        # Get the folders for each item, so we can create them. 
-        train_path = new_train[0].rsplit('/', 1)[0]
-        test_path = new_test[0].rsplit('/', 1)[0]
-
-        os.makedirs(train_path, exist_ok=True)
-        os.makedirs(test_path, exist_ok=True)
-
-        # We now have full paths for all of our new files. Copy.
-        for i in range(0, len(new_train)):
-          shutil.copyfile(old_train[i], new_train[i])
-          train_files += 1
+        if len(new_train) > 0:
+          # Get the folders for each item, so we can create them. 
+          train_path = new_train[0].rsplit('/', 1)[0]
+          os.makedirs(train_path, exist_ok=True)
         
-        for i in range(0, len(new_test)):
-          shutil.copyfile(old_test[i], new_test[i])
-          test_files += 1
+          # We now have full paths for all of our new files. Copy.
+          for i in range(0, len(new_train)):
+            shutil.copyfile(old_train[i], new_train[i])
+            train_files += 1
+          
+          f_trans_train_path = train_path + "/" + trans_orig.rsplit('/', 1)[1]
+          f_trans_train = open(f_trans_train_path, "w")
+          f_trans_train.write(trans_train_content)
+          f_trans_train.close()
         
-        # Finally, write the transcripts. 
-        f_trans_train_path = train_path + "/" + trans_orig.rsplit('/', 1)[1]
-        f_trans_test_path = test_path + "/" + trans_orig.rsplit('/', 1)[1]
-        print("[INFO] TestTrainSplit - Writing transcripts at: %s | %s" % (f_trans_train_path, f_trans_test_path))
-        f_trans_train = open(f_trans_train_path, "w")
-        f_trans_test = open(f_trans_test_path, "w")
-        f_trans_train.write(trans_train_content)
-        f_trans_test.write(trans_test_content)
-        f_trans_train.close()
-        f_trans_test.close()
+        if len(new_test) > 0:
+          test_path = new_test[0].rsplit('/', 1)[0]
+          os.makedirs(test_path, exist_ok=True)
+
+          for i in range(0, len(new_test)):
+            shutil.copyfile(old_test[i], new_test[i])
+            test_files += 1
+          
+          f_trans_test_path = test_path + "/" + trans_orig.rsplit('/', 1)[1]
+          f_trans_test = open(f_trans_test_path, "w") 
+          f_trans_test.write(trans_test_content)
+          f_trans_test.close()
 
   print("[INFO] TestTrainSplit - Successfully processed %d files with %.2f train split." % (total_files, train_percentage))
   print("                        Train files: %d" % train_files)

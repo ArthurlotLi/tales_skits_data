@@ -59,7 +59,6 @@ speaker_whitelist = {
     "GAIUS",
     "TEEPO",
     "ELLE",
-    "JULIUS",
   ],
   "vesperia" : [
     "YURI",
