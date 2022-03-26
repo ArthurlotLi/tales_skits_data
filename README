@@ -28,6 +28,15 @@ or even speakers posing as other speakers.
 Data generation variables such as sampling rate, error tolerances, etc.
 are highly configurable, found in data_params.py.
 
+Once the data has been generated, for use in the multispeaker_synthesis
+project a few addtional steps are recommended. 
+
+- Split dataset into test and train (by utterance, not speaker)
+- Preprocess data and transcripts for Montreal Force Aligner
+- Use Montreal Force Aligner to generate TextGrids
+- Postprocess using TextGrids, wavs, and transcripts to generate alignment
+  files. 
+
 ------------------------------------------------------------------------------
 Usage:
 ------------------------------------------------------------------------------
@@ -69,3 +78,24 @@ To generate a dataset, make sure to do the following:
 7. Optionally, run test_train_split.py to split data accordingly. Note
    that the split occurs by utterances, not by speakers, so the same 
    speakers will appear in test and train.
+
+8. To generate alignment files, follow these additional steps after 
+   splitting into test and train.
+
+   a. Copy test/train directories to TalesSkitsAligned
+   b. Run test_train_align_preprocess.py
+   c. If on windows, use the linux subsystem with wsl --install on 
+      powershell.
+   d. Install conda, MFA, activate MFA environment in the subsystem
+   e. Navigate to tales_skits_data via mnt folder
+   f. Run mfa download for acoustic english and dictionary english
+   g. Run $ mfa validate TalesSkitsAligned english english
+   h. Verify everything is good, then run $ mfa align TalesSkitsAligned
+      english english
+   i. Access the files on windows via file explorer //wsl$. Copy the 
+      files into the TalesSkitsAligned directory and rename as 
+      train_textgrids and test_textgrids
+   j. Run postprocessing - test_train_align_postprocess.py
+   k. Copy the resulting files directly into your original dataset and
+      voila, you have alignment files, ready for multispeaker synthesis
+      synthesizer preprocessing! 
