@@ -23,7 +23,7 @@ import numpy as np
 import shutil
 
 min_test_utterances = 10
-train_percentage = 0.90
+train_percentage = 0.85
 train_location = "./TalesSkits/train"
 test_location = "./TalesSkits/test"
 
