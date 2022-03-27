@@ -172,24 +172,25 @@ def process_textgrids_and_transcript(directory_fpath, textgrids_fpath):
           # This buffer means that reliably there should be a _ ms buffer
           # of silence for this utterance before audio began. 
           first_tuple = intervals[0]
+          if first_tuple[2] != "":
 
-          # Load the wav and detect silence tuples.
-          wav = AudioSegment.from_wav(wav_location)
-          dBFS=wav.dBFS
-          silence_tuples = silence.detect_silence(wav, min_silence_len=nonsilence_buffer_ms, silence_thresh=dBFS-silence_thresh)
+            # Load the wav and detect silence tuples.
+            wav = AudioSegment.from_wav(wav_location)
+            dBFS=wav.dBFS
+            silence_tuples = silence.detect_silence(wav, min_silence_len=nonsilence_buffer_ms, silence_thresh=dBFS-silence_thresh)
 
-          # Get the first silence tuple and use it's ending as the xmax
-          # of our new first silence tuple. 
-          if len(silence_tuples) == 0 or silence_tuples[0][1]/1000 >= first_tuple[1]:
-            first_silence_end = 0
-          else:
-            first_silence_end = silence_tuples[0][1]/1000
+            # Get the first silence tuple and use it's ending as the xmax
+            # of our new first silence tuple. 
+            if len(silence_tuples) == 0 or silence_tuples[0][1]/1000 >= first_tuple[1]:
+              first_silence_end = 0
+            else:
+              first_silence_end = silence_tuples[0][1]/1000
 
-          zero_tuple = (0, first_silence_end, "")
-          new_first_tuple = (first_silence_end, first_tuple[1], first_tuple[2])
+            zero_tuple = (0, first_silence_end, "")
+            new_first_tuple = (first_silence_end, first_tuple[1], first_tuple[2])
 
-          del intervals[0]
-          intervals = [zero_tuple, new_first_tuple] + intervals
+            del intervals[0]
+            intervals = [zero_tuple, new_first_tuple] + intervals
 
           # Let's generate the new final line for this file. Start with the
           # wav name.
