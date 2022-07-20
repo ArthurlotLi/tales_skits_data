@@ -3,9 +3,9 @@
 
 Tools for collecting voice actor data from Tales of video games. Produces audio samples and transcripts of utterances grouped by speaker, identified and transcribed via Optical Character Recognition of on-screen texts during ingame "skits".
 
-[![Tales of Skits Website](https://i.imgur.com/A7HdMCQ.png "Tales of Skits Website")](http://talesofskits.com/)
-
 Data is preprocessed in a manner that makes it a suitable companion for the LibriSpeech dataset.
+
+[![Tales of Skits Website](https://i.imgur.com/A7HdMCQ.png "Tales of Skits Website")](http://talesofskits.com/)
 
 Integrates the speaker encoder model from the multispeaker_synthesis project in order to detect obviously "unclean" utterances by comparing all samples in a directory to each other and flagging utterances with a diff vector that has a greater l2 norm than the specified tolerance. 
 
