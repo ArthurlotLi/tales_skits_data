@@ -57,21 +57,24 @@ To generate a dataset, make sure to do the following:
 8. To generate alignment files, follow these additional steps after 
    splitting into test and train.
 
-   a. Copy test/train directories to TalesSkitsAligned
+   - Copy test/train directories to TalesSkitsAligned
 
-   b. Run test_train_align_preprocess.py
+   - Run test_train_align_preprocess.py
 
-   c. If on windows, use the linux subsystem with wsl --install on powershell.
+   - If on windows, use the linux subsystem with wsl --install on powershell.
 
-   d. Install conda, MFA, activate MFA environment in the subsystem
+   - Install conda, MFA, activate MFA environment in the subsystem
 
-   e. Navigate to tales_skits_data via mnt folder
+   - Navigate to tales_skits_data via mnt folder
 
-   f. Run mfa download for acoustic english and dictionary english
+   - Run mfa download for acoustic english and dictionary english
 
-   g. Run $ mfa validate TalesSkitsAligned english english
+   - Run $ mfa validate TalesSkitsAligned english english
 
-   h. Verify everything is good, then run $ mfa align TalesSkitsAligned english english
-   i. Access the files on windows via file explorer //wsl$. Copy the files into the TalesSkitsAligned directory and rename as train_textgrids and test_textgrids
-   j. Run postprocessing - test_train_align_postprocess.py
-   k. Copy the resulting files directly into your original dataset and voila, you have alignment files, ready for multispeaker synthesis synthesizer preprocessing! 
+   - Verify everything is good, then run $ mfa align TalesSkitsAligned english english
+   
+   - Access the files on windows via file explorer //wsl$. Copy the files into the TalesSkitsAligned directory and rename as train_textgrids and test_textgrids
+
+   - Run postprocessing - test_train_align_postprocess.py
+
+   - Copy the resulting files directly into your original dataset and voila, you have alignment files, ready for multispeaker synthesis synthesizer preprocessing! 
