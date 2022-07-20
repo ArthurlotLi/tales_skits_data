@@ -1,5 +1,5 @@
 
-# Tales Skits Data - Dataset Collection Algorithms
+# Tales Skits Data - Dataset Generation Algorithms
 
 Tools for collecting voice actor data from Tales of video games. Produces audio samples and transcripts of utterances grouped by speaker, identified and transcribed via Optical Character Recognition of on-screen texts during ingame "skits".
 
@@ -72,7 +72,7 @@ To generate a dataset, make sure to do the following:
    - Run $ mfa validate TalesSkitsAligned english english
 
    - Verify everything is good, then run $ mfa align TalesSkitsAligned english english
-   
+
    - Access the files on windows via file explorer //wsl$. Copy the files into the TalesSkitsAligned directory and rename as train_textgrids and test_textgrids
 
    - Run postprocessing - test_train_align_postprocess.py
